@@ -77,18 +77,47 @@ body.live .demo-only { display: none !important; }
 .agent-head { display: flex; align-items: center; gap: 6px; }
 .agent-head b { font-size: 14px; }
 .agent-head .dom { font-size: 12px; color: var(--muted); }
-.goals { list-style: none; margin: 6px 0 0; padding: 0 0 0 20px; transition: opacity .2s; }
-.goals[hidden] { display: none; }
+.mini { font: 700 12px ui-monospace, Menlo, monospace; padding: 2px 7px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); }
+.mini.mid { background: var(--warn-soft); color: var(--warn); }
+.mini.low { background: var(--bad-soft); color: var(--bad); }
+.insight { padding: 10px 0 4px 20px; }
+.insight .paused { font-size: 13px; color: var(--muted); margin: 0; }
+.score-block { display: flex; align-items: center; gap: 12px; }
+.big-ring { --tone: var(--accent); position: relative; width: 64px; height: 64px; flex: none; }
+.big-ring.mid { --tone: var(--warn); }
+.big-ring.low { --tone: var(--bad); }
+.big-ring svg { width: 64px; height: 64px; transform: rotate(-90deg); }
+.big-ring circle { fill: none; stroke-width: 7; }
+.big-ring .track { stroke: var(--line); }
+.big-ring .val { stroke: var(--tone); stroke-linecap: round; transition: stroke-dasharray .5s; }
+.big-ring .num { position: absolute; inset: 0; display: grid; place-items: center; font-size: 19px; font-weight: 800; color: var(--tone); }
+.score-block .phase { font-size: 12px; font-weight: 600; }
+.counts { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.cnt { font-size: 11px; padding: 1px 7px; border-radius: 999px; background: var(--surface-2); color: var(--muted); }
+.cnt.good { background: var(--accent-soft); color: var(--accent); }
+.cnt.bad { background: var(--bad-soft); color: var(--bad); }
+.cnt.late { background: var(--warn-soft); color: var(--warn); }
+.agoal { font-size: 12px; color: var(--muted); margin: 8px 0 4px; }
+.insight .topic { font-size: 11px; font-weight: 700; color: var(--faint); text-transform: uppercase; letter-spacing: .06em; padding: 8px 0 0; }
+.insight .rule { padding: 6px 0; }
+.insight .rule summary { font-size: 13px; }
+.insight .st.good { color: var(--accent); }
+.insight .st.bad { color: var(--bad); }
+.insight .st.late { color: var(--warn); }
+.rule .dot.late { background: var(--warn); }
+.insight .hist, .insight .ev { margin-top: 6px; }
+.ai { margin: 8px 0 4px; display: grid; gap: 6px; }
+.ai .btn { justify-self: start; padding: 6px 12px; font-size: 13px; }
+.ai-hint { font-size: 12px; color: var(--faint); }
+.ai-out { font-size: 13px; white-space: pre-wrap; background: var(--surface-2); border-radius: 10px; padding: 8px 10px; }
+.ai-out.err { background: var(--warn-soft); color: var(--warn); }
+.ai-out.muted { color: var(--muted); }
 .fold-agent { border: 0; background: none; padding: 0; display: flex; gap: 6px; align-items: flex-start; text-align: left; flex: 1; min-width: 0; }
 .fold-agent .dom { display: block; }
 .chev { display: inline-block; width: 14px; color: var(--muted); font-size: 16px; line-height: 18px; transition: transform .2s; }
 .agent.open .chev { transform: rotate(90deg); }
 .gear { border: 0; background: none; color: var(--muted); font-size: 16px; padding: 2px 4px; border-radius: 6px; }
 .gear:hover { color: var(--ink); background: var(--surface-2); }
-.goals .days { font-style: normal; font-size: 11px; color: var(--faint); margin-left: 4px; }
-.goals li { display: flex; justify-content: space-between; align-items: center; font-size: 13px; padding: 4px 0 4px 2px; }
-.goals li.off span:first-child { color: var(--faint); text-decoration: line-through; }
-.agent.off .goals { opacity: .45; }
 .agent.off .agent-head b { color: var(--muted); }
 .switch { position: relative; display: inline-block; width: 36px; height: 21px; flex: none; }
 .switch.sm { width: 30px; height: 18px; }
@@ -212,7 +241,6 @@ body.live .demo-only { display: none !important; }
 .fold .stack i.bad { background: var(--bad); }
 .fold:hover { color: var(--ink); }
 .nowline { display: flex; align-items: center; gap: 10px; padding: 10px 0 8px; }
-.nowline::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: var(--accent); }
 .nowline .pill { font: 700 12px ui-monospace, Menlo, monospace; color: var(--accent-ink); background: var(--accent); border-radius: 999px; padding: 2px 9px; }
 .nowline::after { content: ""; flex: 1; height: 2px; background: var(--accent); border-radius: 1px; }
 
@@ -274,7 +302,9 @@ body.live .demo-only { display: none !important; }
   position: sticky; top: 76px; height: calc(100vh - 100px); min-height: 480px; overflow: hidden; transition: box-shadow .3s; }
 @media (max-width: 860px) { .assistant { position: static; height: 70vh; } }
 .assistant.flash { box-shadow: 0 0 0 2px var(--accent), var(--shadow); }
-.tabs { display: flex; gap: 4px; padding: 10px 12px 0; border-bottom: 1px solid var(--line); }
+.side-head { padding: 14px 16px 12px; border-bottom: 1px solid var(--line); display: grid; gap: 2px; }
+.side-head b { font-size: 15px; }
+.side-head span { font-size: 12px; color: var(--muted); }
 .tabs button { border: 0; background: none; padding: 9px 12px 11px; font-size: 14px; font-weight: 600; color: var(--muted);
   border-bottom: 2px solid transparent; margin-bottom: -1px; position: relative; }
 .tabs button.on { color: var(--ink); border-bottom-color: var(--accent); }
@@ -336,7 +366,7 @@ body.live .demo-only { display: none !important; }
     <section class="agents">
       <nav class="ltabs" id="ltabs"><button data-ltab="agents" class="on">Agents</button><button data-ltab="connectors">Connectors</button></nav>
       <div id="lpane-agents">
-        <p class="hint">Each agent manages its topics and goals. Switch an agent off to pause all its goals, or switch off a single goal.</p>
+        <p class="hint">Each agent runs a science-based contract. Open one for today's score and why each goal matters; ⚙︎ sets its times and goals.</p>
         <div id="agents"></div>
       </div>
       <div id="lpane-connectors" hidden>
@@ -362,7 +392,7 @@ body.live .demo-only { display: none !important; }
   </main>
 
   <aside class="assistant" id="assistant">
-    <nav class="tabs" id="tabs"><button data-tab="assistant" class="on">Assistant</button><button data-tab="insights">Insights</button></nav>
+    <div class="side-head"><b>Assistant</b><span>Morning brief, recovery plan, warnings, evening recap and answers.</span></div>
     <div class="pane" id="pane-assistant">
       <div class="chat" id="chat"><div class="empty-chat">Morning brief, evening recap, warnings and answers appear here. Ask anything.</div></div>
       <div class="composer">
@@ -370,7 +400,6 @@ body.live .demo-only { display: none !important; }
         <form id="form"><input id="text" placeholder="Ask, or log: “had a latte”" autocomplete="off"><button class="btn primary">Send</button></form>
       </div>
     </div>
-    <div class="pane" id="pane-insights" hidden><div id="insights"></div></div>
   </aside>
 </div>
 
@@ -401,7 +430,7 @@ const $ = (id) => document.getElementById(id);
 const dayMin = (hhmm) => { const [h, m] = hhmm.split(":").map(Number); return (h * 60 + m - 240 + 1440) % 1440; };  // day starts 04:00
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
-let S = null, tab = "assistant", playing = false, inflight = false, acc = 0, unread = false;
+let S = null, playing = false, inflight = false, acc = 0;
 let showAllEarlier = false, openWhy = null, toastTimer = null, editing = null, tomorrowOpen = false, lateOpen = false, ltab = "agents";
 const openAgents = new Set();  // agents whose goal list is unfolded
 
@@ -456,7 +485,6 @@ function addChat(m) {
   chat.insertAdjacentHTML("beforeend", `<div class="msg ${m.kind === "user" ? "user" : "agent"} ${isAlert(m) ? "alert" : ""}">` +
     `<div class="stamp num">${m.at}</div><div class="txt">${esc(m.text)}</div></div>`);
   chat.scrollTop = chat.scrollHeight;
-  if (tab !== "assistant") unread = true;
   if (m.kind !== "user" && m.kind !== "reply") {
     $("assistant").classList.add("flash");
     setTimeout(() => $("assistant").classList.remove("flash"), 1500);
@@ -481,7 +509,7 @@ function render() {
   if (!$("scenario").options.length) $("scenario").innerHTML = S.scenarios.map((sc) =>
     `<option value="${sc.id}" title="${esc(sc.description)}">User scenario: ${esc(sc.label)}</option>`).join("");
   $("scenario").value = S.scenario;
-  renderAgents(); renderConnectors(); renderToday(); renderInsights(); renderChrome();
+  renderAgents(); renderConnectors(); renderToday(); renderChrome();
 }
 
 function toggle(label, on, attrs, small = false, disabled = false) {
@@ -490,46 +518,92 @@ function toggle(label, on, attrs, small = false, disabled = false) {
 }
 
 function renderAgents() {
-  const scores = Object.fromEntries(S.contracts.map((c) => [c.id, c.score]));
-  $("agents").innerHTML = S.agents.map((a) => {
-    const score = a.enabled && scores[a.id] != null ? ` · score ${scores[a.id]}` : a.enabled ? "" : " · off";
-    const open = openAgents.has(a.id), on = a.goals.filter((g) => g.enabled).length;
-    return `<div class="agent ${a.enabled ? "" : "off"} ${open ? "open" : ""}">
-      <div class="agent-head">
-        <button class="fold-agent" data-fold="${a.id}" aria-expanded="${open}" title="${open ? "Hide" : "Show"} goals">
-          <span class="chev">›</span><span><b>${esc(a.name)}</b>
-          <span class="dom">${a.domain.toLowerCase() === a.name.toLowerCase() ? "" : `${esc(a.domain[0].toUpperCase() + a.domain.slice(1))} · `}${on}/${a.goals.length} goals${score}</span></span></button>
-        <button class="gear" data-setup="${a.id}" title="Set up ${esc(a.name)} (coming soon)" aria-label="Set up ${esc(a.name)}">⚙︎</button>
-        ${toggle(a.name, a.enabled, `data-agent="${a.id}"`)}</div>
-      <ul class="goals" ${open ? "" : "hidden"}>${goalList(a)}</ul>
-    </div>`;
-  }).join("");
+  const reports = Object.fromEntries(S.contracts.map((c) => [c.id, c]));
+  $("agents").innerHTML = S.agents.map((a) => agentCard(a, reports[a.id])).join("");
   $("agents").querySelectorAll("[data-fold]").forEach((b) => (b.onclick = () => {
     const id = b.dataset.fold;
     openAgents.has(id) ? openAgents.delete(id) : openAgents.add(id);
     renderAgents();
   }));
-  $("agents").querySelectorAll("[data-setup]").forEach((b) => (b.onclick = () => {
-    const a = S.agents.find((x) => x.id === b.dataset.setup);
-    showToast({ kind: "info", at: S.clock, text: `${a.name} setup is coming soon.` });
+  $("agents").querySelectorAll("input[data-agent]").forEach((input) => (input.onchange = () => {
+    logControl(`Agent ${input.checked ? "switched on" : "switched off"}`, S.agents.find((a) => a.id === input.dataset.agent).name);
+    api("toggle", { contract_id: input.dataset.agent, rule_id: null, on: input.checked });
   }));
-  $("agents").querySelectorAll("input").forEach((input) => (input.onchange = () => {
-    const { agent, goal } = input.dataset;
-    const name = goal ? S.agents.find((a) => a.id === agent).goals.find((g) => g.id === goal).label : S.agents.find((a) => a.id === agent).name;
-    logControl(`${goal ? "Goal" : "Agent"} ${input.checked ? "switched on" : "switched off"}`, name);
-    api("toggle", { contract_id: agent, rule_id: goal || null, on: input.checked });
-  }));
+  $("agents").querySelectorAll("[data-ask]").forEach((b) => (b.onclick = () => askClaude(b.dataset.ask)));
 }
 
-function goalList(a) {
+function agentCard(a, report) {
+  const open = openAgents.has(a.id), on = a.goals.filter((g) => g.enabled).length;
+  const score = a.enabled && report?.score != null ? `<span class="mini ${scoreTone(report.score)}" title="Today's score">${report.score}</span>` : "";
+  const domain = a.domain.toLowerCase() === a.name.toLowerCase() ? "" : `${esc(a.domain[0].toUpperCase() + a.domain.slice(1))} · `;
+  const body = a.enabled && report ? agentInsight(a, report) : `<p class="paused">Paused — switch it on to plan and score its goals.</p>`;
+  return `<div class="agent ${a.enabled ? "" : "off"} ${open ? "open" : ""}">
+    <div class="agent-head">
+      <button class="fold-agent" data-fold="${a.id}" aria-expanded="${open}" title="${open ? "Hide" : "Show"} insights">
+        <span class="chev">›</span><span><b>${esc(a.name)}</b>
+        <span class="dom">${domain}${a.enabled ? `${on}/${a.goals.length} goals` : "paused"}</span></span></button>
+      ${score}
+      <button class="gear" data-setup="${a.id}" aria-label="Set up ${esc(a.name)}" title="Set up ${esc(a.name)}">⚙︎</button>
+      ${toggle(a.name, a.enabled, `data-agent="${a.id}"`)}</div>
+    ${open ? `<div class="insight">${body}</div>` : ""}
+  </div>`;
+}
+
+const scoreTone = (score) => (score >= 75 ? "good" : score >= 50 ? "mid" : "low");
+const COUNT_WORDS = [["done", "done"], ["clean", "kept"], ["late", "late"], ["missed", "missed"], ["violated", "broken"],
+  ["pending", "open"], ["waiting", "after waking"]];
+
+function agentInsight(a, report) {
+  const goals = Object.fromEntries(a.goals.map((g) => [g.id, g]));
+  const counts = report.rules.reduce((n, r) => ({ ...n, [r.status]: (n[r.status] || 0) + 1 }), {});
+  const summary = COUNT_WORDS.filter(([status]) => counts[status])
+    .map(([status, word]) => `<span class="cnt ${STATUS_WORD[status]?.[1] || ""}">${counts[status]} ${word}</span>`).join("");
   let topic = null;
-  return a.goals.map((g) => {
-    const head = g.topic && g.topic !== topic ? `<li class="topic">${esc(g.topic)}</li>` : "";
+  const rules = report.rules.map((r) => {
+    const g = goals[r.id] || {}, [word, tone] = STATUS_WORD[r.status] || [r.status, ""];
+    const head = g.topic && g.topic !== topic ? `<div class="topic">${esc(g.topic)}</div>` : "";
     topic = g.topic || topic;
-    return `${head}<li class="${g.enabled ? "" : "off"}">
-      <span>${ICONS[g.action] || "•"} ${esc(g.label)}${g.days.length ? ` <em class="days">${g.days.map((d) => DAY_SHORT[d]).join(" · ")}</em>` : ""}</span>
-      ${toggle(g.label, g.enabled, `data-agent="${a.id}" data-goal="${g.id}"`, true, !a.enabled)}</li>`;
+    return `${head}<details class="rule"><summary><span class="dot ${tone}"></span>
+        <span>${ICONS[g.action] || ""} ${esc(g.label || r.title)}</span><span class="st ${tone}">${word}</span></summary>
+      <div class="body">${esc(r.why)}${r.detail ? `<div class="hist">History: ${esc(r.detail)}</div>` : ""}
+        <div class="ev">Evidence <span class="etag">${r.strength}</span></div>
+        <ul>${r.sources.map((src) => `<li>${esc(src)}</li>`).join("")}</ul></div></details>`;
   }).join("");
+  return `<div class="score-block">${bigRing(report.score)}
+      <div><div class="phase">${esc(report.phase || "Today")}</div><div class="counts">${summary}</div></div></div>
+    <p class="agoal">${esc(a.goal)}</p>
+    ${LIVE ? aiBlock(a) : ""}
+    <div class="rules">${rules}</div>`;
+}
+
+function bigRing(score) {
+  const r = 26, c = 2 * Math.PI * r, v = score == null ? 0 : score / 100;
+  return `<div class="big-ring ${score == null ? "" : scoreTone(score)}"><svg viewBox="0 0 64 64">
+      <circle class="track" cx="32" cy="32" r="${r}"/><circle class="val" cx="32" cy="32" r="${r}" stroke-dasharray="${c * v} ${c}"/></svg>
+    <span class="num">${score ?? "—"}</span></div>`;
+}
+
+// ---------- AI recommendations from Claude (live only) ----------
+const aiAnswers = {};  // agent id -> { text } | { error } | { loading }
+
+function aiBlock(a) {
+  const ans = aiAnswers[a.id] || {};
+  const out = ans.loading ? `<div class="ai-out muted">Asking Claude…</div>`
+    : ans.error ? `<div class="ai-out err">${esc(ans.error)}</div>`
+    : ans.text ? `<div class="ai-out">${esc(ans.text)}</div>` : "";
+  const hint = a.context ? "" : `<div class="ai-hint">Tip: add your context in ⚙︎ for more personal advice.</div>`;
+  return `<div class="ai"><button class="btn secondary" data-ask="${a.id}" ${ans.loading ? "disabled" : ""}>✨ Recommendations from Claude</button>${hint}${out}</div>`;
+}
+
+async function askClaude(agentId) {
+  aiAnswers[agentId] = { loading: true };
+  renderAgents();
+  try {
+    aiAnswers[agentId] = { text: (await post("recommend", { contract_id: agentId })).recommendation };
+  } catch (err) {
+    aiAnswers[agentId] = { error: err.message };
+  }
+  renderAgents();
 }
 
 function renderConnectors() {
@@ -590,10 +664,18 @@ function nowSection(now, later) {
 }
 
 const PAST_VISIBLE = 2;  // most recent past items stay unfolded
+
+/** The time a row shows: open goals "by" their due time, limits "now", later goals their start. */
+const shownTime = (i) => (i.slot === "later" ? i.at : i.kind === "avoid" ? S.clock : i.by);
+
+/** Open and later items in strict time order, so the timeline reads like a clock. */
+function upcoming(t) {
+  const items = [...(t.now.hero ? [t.now.hero] : []), ...t.now.also, ...t.now.avoid, ...t.later];
+  return items.map((i, n) => [dayMin(shownTime(i)), n, i]).sort((x, y) => x[0] - y[0] || x[1] - y[1]).map(([, , i]) => i);
+}
 let withBusy = (items, toRows) => items.flatMap(toRows);  // calendar.js replaces it to merge meetings in
 
 function timelineSection(t) {
-  const current = [...(t.now.hero ? [t.now.hero] : []), ...t.now.also, ...t.now.avoid];
   const ls = t.late_start;
   const past = ls ? t.earlier.filter((i) => i.cause !== "late_start") : t.earlier;
   const keepOpen = past.findIndex((i) => i.rule_id === editing);
@@ -602,9 +684,9 @@ function timelineSection(t) {
   const rows = [];
   if (folded.length) rows.push(foldRow(folded));
   rows.push(...withBusy(past.slice(folded.length), (i) => i.root && ls ? lateStartRows(i, ls, t.earlier) : [pastRow(i)], "past"));
-  rows.push(`<div class="nowline" title="Now"></div>`);
-  rows.push(...withBusy(current, (c) => [currentRow(c, c === t.now.hero)], "now"));
-  rows.push(...withBusy(t.later, (i) => [futureRow(i)], "later"));
+  rows.push(`<div class="nowline" title="Now"><span class="pill num">${S.clock}</span></div>`);
+  rows.push(...withBusy(upcoming(t), (i) => [i.slot === "later" ? futureRow(i) : currentRow(i, i === t.now.hero)],
+    "upcoming", (i) => dayMin(shownTime(i))));
   if (t.tomorrow) rows.push(tomorrowRows(t.tomorrow));
   return `<div class="timeline">${rows.join("")}</div>`;
 }
@@ -747,36 +829,13 @@ function ruleInfo(ruleId) {
   for (const c of S.contracts) for (const r of c.rules) if (r.id === ruleId) return r;
 }
 
-function renderInsights() {
-  $("insights").innerHTML = `<p class="lede">Each score follows science-based rules. Open a rule to see why it matters and the evidence behind it.</p>
-    <div class="contracts">` + S.contracts.map((c) => `<div class="contract"><div class="head">${ring(c.score)}
-      <div><div class="score num">${c.score ?? "—"}</div><div style="font-weight:600">${esc(c.name)}</div></div></div>
-      <div class="goal">${esc(c.goal)}</div>
-      ${c.rules.map((r) => { const [word, tone] = STATUS_WORD[r.status] || [r.status, ""];
-        return `<details class="rule"><summary><span class="dot ${tone}"></span><span>${esc(r.title)}</span><span class="st">${word}</span></summary>
-        <div class="body">${esc(r.why)}${r.detail ? `<div style="margin-top:6px">History: ${esc(r.detail)}</div>` : ""}
-          <div style="margin-top:6px">Evidence: <span class="etag">${r.strength}</span></div>
-          <ul>${r.sources.map((s) => `<li>${esc(s)}</li>`).join("")}</ul></div></details>`; }).join("")}
-    </div>`).join("") + `</div>`;
-}
-
 function renderChrome() {
   $("ltabs").querySelectorAll("button").forEach((b) => b.classList.toggle("on", b.dataset.ltab === ltab));
   $("lpane-agents").hidden = ltab !== "agents";
   $("lpane-connectors").hidden = ltab !== "connectors";
-  $("tabs").querySelectorAll("button").forEach((b) => {
-    b.classList.toggle("on", b.dataset.tab === tab);
-    b.querySelector(".dot")?.remove();
-    if (b.dataset.tab === "assistant" && unread) b.insertAdjacentHTML("beforeend", `<span class="dot"></span>`);
-  });
-  $("pane-assistant").hidden = tab !== "assistant";
-  $("pane-insights").hidden = tab !== "insights";
 }
 
-function setTab(t) { tab = t; if (t === "assistant") unread = false; renderChrome(); }
-
 // ---------- static UI ----------
-$("tabs").querySelectorAll("button").forEach((b) => (b.onclick = () => setTab(b.dataset.tab)));
 $("ltabs").querySelectorAll("button").forEach((b) => (b.onclick = () => { ltab = b.dataset.ltab; renderChrome(); }));
 $("scenario").onchange = () => restart();
 $("toast").onclick = () => $("toast").classList.remove("show");
@@ -812,12 +871,11 @@ function clearPanels() {
 }
 
 async function restart() {
-  setPlaying(false); showAllEarlier = false; openWhy = null; editing = null; tomorrowOpen = false; unread = false; lateOpen = false;
+  setPlaying(false); showAllEarlier = false; openWhy = null; editing = null; tomorrowOpen = false; lateOpen = false;
   clearPanels();
   await api("reset", { scenario: $("scenario").value || null });
   const sc = S.scenarios.find((x) => x.id === S.scenario);
   $("feed").innerHTML = `<li><span class="t num">${S.clock}</span><span>🎬</span><span><b>Scenario: ${esc(sc.label)}</b> · ${esc(sc.description)}</span></li>`;
-  setTab("assistant");
 }
 $("reset").onclick = restart;
 $("jump-form").onsubmit = async (e) => {

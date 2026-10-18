@@ -13,7 +13,9 @@ from .demo import PROFILE, seed_history
 from .loader import load_actions, load_contracts
 from .model import ContractReport, Message, RuleKind, RuleResult, Status
 from .connectors import CONNECTORS
-from .personal import DAY_ORDER, parse_times
+from .ai import RECOMMENDERS, AiUnavailable, facts_for
+from .personal import DAY_ORDER, LABELS, parse_times
+from .storage import LiveStore
 from .scenarios import DEFAULT, SCENARIOS, TYPICAL_WEEK, YOU
 from .sleep_plan import plan_wake
 from .today import build_today
@@ -38,10 +40,11 @@ class Outbox:
 
 class Simulation:
     def __init__(self, wait_for_observed: bool = False, compact_routines: bool = False, today: date | None = None,
-                 live: bool = False):
+                 live: bool = False, store: LiveStore | None = None):
         self.wait_for_observed = wait_for_observed
         self.compact_routines = compact_routines
         self.live = live  # real clock, no history, nothing scripted: the owner tests their own day
+        self.store = store  # live mode: the owner's real data, one file per day
         self.profile = PROFILE  # the owner's setup survives resets and replays
         self.day_overrides: dict[tuple[str, str], tuple[str, ...]] = {}
         self.meetings: list[calendar_ics.CalEvent] = []  # today's busy times; survive replays of the day
@@ -57,6 +60,7 @@ class Simulation:
         self.assistant.day_overrides = dict(self.day_overrides)
         if self.live:
             self.now = datetime.now().replace(second=0, microsecond=0)
+            self._restore()
         else:
             seed_history(self.assistant, today, pattern=TYPICAL_WEEK)
             self.now = datetime.combine(today, time(6, 30))
@@ -78,6 +82,34 @@ class Simulation:
             if stop_on_agent and any(m["kind"] != "sensor" for m in out):  # incl. reactions to sensor data
                 break
         return out
+
+    # --- live data --------------------------------------------------------------------------
+
+    def _restore(self) -> None:
+        if not self.store:
+            return
+        self.store.restore(self.assistant)
+        self.profile, self.day_overrides = self.assistant.profile, dict(self.assistant.day_overrides)
+
+    def persist(self) -> None:
+        if self.live and self.store:
+            self.store.save(self.assistant, self.assistant.ctx.logical_day(self.now))
+
+    def set_context(self, contract_id: str, text: str) -> None:
+        if contract_id not in self._contracts:
+            raise ValueError(f"unknown agent '{contract_id}'")
+        self.assistant.agent_context[contract_id] = text.strip()
+
+    def recommendation_input(self, contract_id: str):
+        """Everything one agent's AI recommendation needs, captured under the lock (the Claude call runs outside it)."""
+        if not self.live:
+            raise ValueError("AI recommendations are available in live mode only.")
+        if contract_id not in RECOMMENDERS:
+            raise ValueError(f"no recommender for agent '{contract_id}'")
+        report = next((r for r in self.assistant.status(self.now) if r.contract.id == contract_id), None)
+        if not report:
+            raise ValueError("Switch this agent on to get recommendations.")
+        return RECOMMENDERS[contract_id], facts_for(report, self.now), self.assistant.agent_context.get(contract_id, "")
 
     def jump(self, hhmm: str) -> list[dict]:
         """Move the simulated clock to HH:MM today; going back replays the day from the start."""
@@ -249,8 +281,18 @@ class Simulation:
         return [{"id": c.id, "name": c.name, "domain": c.domain, "goal": c.goal, "enabled": a.is_enabled(c.id),
                  "goals": [{"id": r.id, "label": r.label, "kind": r.kind.value, "action": r.actions[0],
                             "days": list(a.customized(c.id, r).days), "weekly": bool(r.days), "topic": r.topic,
-                            "enabled": (c.id, r.id) not in a.disabled_rules} for r in c.rules]}
+                            "enabled": (c.id, r.id) not in a.disabled_rules} for r in c.rules],
+                 "anchors": self._agent_anchors(c), "context_hint": c.context_hint,
+                 "context": a.agent_context.get(c.id, "")}
                 for c in a.contracts]
+
+    def _agent_anchors(self, contract) -> list[dict]:
+        """The day times this agent plans around; a time shared with other agents is edited in one place."""
+        used = lambda c: {r.window.anchor for r in c.rules} | {r.reopens for r in c.rules if r.reopens}
+        anchors = self.assistant.profile.anchors
+        return [{"id": name, "label": LABELS[name], "time": f"{anchors[name].time:%H:%M}",
+                 "shared": [c.name for c in self.assistant.contracts if c.id != contract.id and name in used(c)]}
+                for name in DAY_ORDER if name in used(contract)]
 
     def _profile(self) -> dict:
         anchors = self.assistant.profile.anchors
@@ -352,7 +394,7 @@ class Simulation:
 
 SIMS = {"v1": Simulation(), "v2": Simulation(wait_for_observed=True),
         "v3": Simulation(wait_for_observed=True, compact_routines=True),
-        "live": Simulation(wait_for_observed=True, compact_routines=True, live=True)}
+        "live": Simulation(wait_for_observed=True, compact_routines=True, live=True, store=LiveStore())}
 LOCK = threading.Lock()
 
 
@@ -388,6 +430,9 @@ def handle(sim: Simulation, op: str, body: dict) -> dict:
     elif op == "busy":
         sim.load_meetings(body)
         messages = []
+    elif op == "context":
+        sim.set_context(body["contract_id"], body.get("text", ""))
+        messages = []
     elif op == "sensors":
         sim.sensors_on = bool(body["on"])
         messages = []
@@ -395,6 +440,7 @@ def handle(sim: Simulation, op: str, body: dict) -> dict:
         messages = []
     else:
         raise KeyError(op)
+    sim.persist()
     return {"messages": synced + messages, "state": sim.state(), "live": sim.live}
 
 
@@ -409,6 +455,13 @@ def static_asset(path: str) -> Path | None:
         return None
     asset = WEB / name
     return asset if asset.is_file() else None
+
+
+def recommend(sim: Simulation, contract_id: str) -> dict:
+    """One agent's AI recommendation; the slow Claude call runs outside the lock so the app stays responsive."""
+    with LOCK:
+        recommender, facts, context = sim.recommendation_input(contract_id)
+    return {"contract_id": contract_id, "recommendation": recommender(facts, context)}
 
 
 def calendar_text(sim: Simulation) -> str:
@@ -436,14 +489,21 @@ class Handler(BaseHTTPRequestHandler):
         if not self.path.startswith("/api/"):
             return self._send(404, b"not found", "text/plain")
         body = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)) or b"{}")
+        parts = self.path.removeprefix("/api/").split("/", 1)
+        version, op = (parts[0], parts[1]) if parts[0] in SIMS and len(parts) == 2 else ("v1", parts[0])
         try:
+            if op == "recommend":
+                return self._json(200, recommend(SIMS[version], body["contract_id"]))
             with LOCK:
-                parts = self.path.removeprefix("/api/").split("/", 1)
-                version, op = (parts[0], parts[1]) if parts[0] in SIMS and len(parts) == 2 else ("v1", parts[0])
                 result = handle(SIMS[version], op, body)
-            self._send(200, json.dumps(result).encode(), "application/json")
+            self._json(200, result)
+        except AiUnavailable as e:
+            self._json(503, {"error": str(e)})
         except (KeyError, ValueError, StopIteration) as e:
-            self._send(400, json.dumps({"error": str(e)}).encode(), "application/json")
+            self._json(400, {"error": str(e)})
+
+    def _json(self, code: int, payload: dict) -> None:
+        self._send(code, json.dumps(payload).encode(), "application/json")
 
     def _send(self, code: int, payload: bytes, content_type: str) -> None:
         self.send_response(code)

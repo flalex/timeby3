@@ -44,8 +44,9 @@ scoring of situation/state) must be deterministic and grounded — never random,
   Rules can declare `pairs` (goals to do together), `topic` (grouping), `remind: false` (companion goals).
 - `connectors.py`: declared connectors (calendar, fitness tracker, location) — UI only, not implemented.
 - Demo readiness (see `docs/next/`): `web/story.js` = Story mode (6 chapters on the real engine; uses the default
-  day, restores the owner's setup on exit); `personal.py` + `web/setup.js` = "Your day" times and per-agent weekdays
-  (`Assistant.set_profile/set_days`, survive resets); `calendar_ics.py` + `calendar_feed.py` + `web/calendar.js` =
+  day, restores the owner's setup on exit); `personal.py` + `web/setup.js` = the agent ⚙︎ dialog: its day times, goals
+  on/off + weekdays, and (live) context for Claude
+  (`Assistant.set_profile/set_days`, survive resets); the Agents tab shows each agent's insights (score, goals, why); `calendar_ics.py` + `calendar_feed.py` + `web/calendar.js` =
   `/calendar.ics` plan feed and meetings that hold reminders until they end (`Assistant.set_busy`).
   Feature scripts are served from `/static/<name>.js` and rely on v3.html globals.
 - Agents = contracts, goals = rules. `Assistant.set_enabled(contract_id, on, rule_id=None)` switches either off;
@@ -57,7 +58,11 @@ scoring of situation/state) must be deterministic and grounded — never random,
 - Interactive simulator: `python3 -m timeby.server` → http://localhost:8765 (v1), /v2, /v3 (current direction).
   Each version runs an independent simulation. v3 = desktop web app: Today/Insights + Assistant panel, demo bar + agent-activity feed;
   view model in `timeby/today.py` (earlier / now / later), `wait_for_observed=True`, `compact_routines=True`.
-- Live (non-demo) mode: http://localhost:8765/live — real clock, no history, nothing scripted; state is in memory.
+- Live (non-demo) mode: http://localhost:8765/live — real clock, nothing scripted. Saved to `data/live/` (or
+  `TIMEBY_DATA_DIR`): one JSON file per logical day + `settings.json` (`storage.py`); restored on server start.
+- AI recommendations (live only, `ai.py`): one function per agent (`recommend_<agent>`), shared prompt/call, grounded
+  on the engine's facts + the owner's per-agent context (⚙︎). Needs `pip install -r requirements-ai.txt` and
+  `ANTHROPIC_API_KEY`; model `claude-opus-5-5` with server-side refusal fallback. Claude advises, never decides.
   Demo controls on /v3 include "Jump to" (any time today; jumping back replays the day).
 - Console demo: `python3 -m timeby`
 - Tests: `python3 -m pytest -q tests`

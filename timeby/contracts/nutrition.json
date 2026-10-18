@@ -2,6 +2,7 @@
   "id": "nutrition",
   "name": "Nutrition",
   "domain": "nutrition",
+  "context_hint": "Diet preferences, allergies or intolerances, what you usually eat, cooking time, hunger patterns.",
   "goal": "Regular meal times, enough water, plenty of plants and a protein-rich breakfast.",
   "sources": {
     "pot2016": "Pot GK, Almoosawi S, Stephen AM. Meal irregularity and cardiometabolic consequences: results from observational and intervention studies. Proc Nutr Soc, 2016.",

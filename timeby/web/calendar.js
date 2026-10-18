@@ -1,5 +1,5 @@
 // Calendar connector for v3: meetings in the timeline, and feed / busy-time actions on the Calendar card.
-// Plugs into v3.html globals (S, api, render, renderConnectors, withBusy, showToast, esc, $).
+// Plugs into v3.html globals (S, api, render, renderConnectors, withBusy, dayMin, showToast, esc, $).
 (() => {
   const FEED_PATH = LIVE ? "/calendar/live.ics" : "/calendar.ics";
   const feedUrl = () => `${location.origin}${FEED_PATH}`;
@@ -19,12 +19,14 @@
   </style>`);
 
   // ---------- timeline: meetings as grey rows, merged by time into each part of the day ----------
-  withBusy = (items, toRows, phase) => {
-    const meetings = (S.busy || []).filter((m) => m.phase === phase);
+  // `keyOf` gives each timeline item's position in minutes of the logical day, so meetings slot in by time.
+  withBusy = (items, toRows, phase, keyOf = (item) => dayMin(item.at)) => {
+    const phases = phase === "upcoming" ? ["now", "later"] : [phase];
+    const meetings = (S.busy || []).filter((m) => phases.includes(m.phase));
     const rows = [];
     let next = 0;
     for (const item of items) {
-      while (next < meetings.length && meetings[next].sort <= item.sort) rows.push(meetingRow(meetings[next++]));
+      while (next < meetings.length && dayMin(meetings[next].start) <= keyOf(item)) rows.push(meetingRow(meetings[next++]));
       rows.push(...toRows(item));
     }
     return rows.concat(meetings.slice(next).map(meetingRow));

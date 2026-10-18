@@ -2,6 +2,7 @@
   "id": "fitness",
   "name": "Fitness",
   "domain": "fitness",
+  "context_hint": "Current level, injuries or pain, equipment, club opening hours, goals for this season.",
   "goal": "Hit the weekly activity guideline through planned sessions: surfing, padel and workouts.",
   "sources": {
     "who2020": "Bull FC et al. World Health Organization 2020 guidelines on physical activity and sedentary behaviour. Br J Sports Med, 2020.",

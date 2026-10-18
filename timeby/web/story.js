@@ -1,5 +1,5 @@
 // Story mode: a scripted walkthrough of one day on the real engine, driven through the v3 page's own API helpers.
-// Relies on v3.html globals: LIVE, S, api, restart, setPlaying, setTab, renderAgents, renderToday, openAgents,
+// Relies on v3.html globals: LIVE, S, api, post, restart, setPlaying, dayMin, renderAgents, renderToday, openAgents,
 // logControl, tomorrowOpen, $, esc.
 (() => {
   if (LIVE) return;
@@ -9,8 +9,21 @@
   const BEAT_MS = 1800;    // pause inside a chapter so the viewer sees the "before" state
   const BEAT = "beat";
 
-  const jumpTo = (at) => () => api("jump", { at });
-  const showTab = (t) => () => setTab(t);
+  const CLOCK_TICKS = 24;    // a story jump moves the clock in this many visible steps
+  const CLOCK_TICK_MS = 70;
+
+  /** Moves the clock so the viewer sees time pass (the timeline's now-line travels); replays jump instantly. */
+  const jumpTo = (at) => async (fast, token) => {
+    let left = dayMin(at) - dayMin(S.clock);
+    if (fast || left <= 0) return api("jump", { at });
+    const step = Math.max(1, Math.ceil(left / CLOCK_TICKS));
+    while (left > 0 && token === run) {
+      const minutes = Math.min(step, left);
+      await api("advance", { minutes, stop_on_agent: false });
+      left -= minutes;
+      await sleep(CLOCK_TICK_MS);
+    }
+  };
 
   async function doneBoth() {
     const hero = S.today.now.hero;
@@ -37,14 +50,14 @@
   }
 
   const CHAPTERS = [
-    { at: "06:30", title: "Meet your agents", focus: ["#agents", "#pane-insights"],
-      text: "Each agent runs a contract: goals, time windows and the studies behind every rule.",
+    { at: "06:30", title: "Meet your agents", focus: ["#agents"],
+      text: "Each agent runs a contract: goals, time windows and the studies behind every rule — with today's score.",
       point: "Every recommendation comes from a science-based contract — nothing is improvised.",
-      steps: [startStory, showAgentGoals, showTab("insights")] },
+      steps: [startStory, showAgentGoals] },
     { at: "08:25", title: "Overslept", focus: ["#assistant"],
       text: "One alarm at 07:00, then silence while asleep. The wearable reports waking at 08:25 and the agent sends one recovery plan.",
       point: "Proactive and calm: one plan instead of a wall of red.",
-      steps: [showTab("assistant"), jumpTo("08:25")] },
+      steps: [jumpTo("08:25")] },
     { at: "08:30", title: "Do both", focus: ["#now-card"],
       text: "Daylight and breakfast are both due, so the Now card suggests doing them together — and the owner taps “Done both”.",
       point: "Productivity: compress, don't drop.",
@@ -53,14 +66,14 @@
       text: "A café card payment at 17:45 is read as coffee. It breaks the caffeine cut-off, and the agent says why.",
       point: "Data sources act for the owner — nothing to type.",
       steps: [jumpTo("17:45")] },
-    { at: "18:00", title: "Fix the record", focus: ["#timeline", "#pane-insights"],
-      text: "The morning walk shows as missed — the owner did walk, just forgot to log it. One edit and the score updates.",
+    { at: "18:00", title: "Fix the record", focus: ["#timeline", "#agents"],
+      text: "The morning walk shows as missed — the owner did walk, just forgot to log it. One edit and the agent's score updates.",
       point: "The owner stays in control; scores stay honest.",
-      steps: [jumpTo("18:00"), showTab("insights"), BEAT, fixForgottenWalk] },
+      steps: [jumpTo("18:00"), showAgentGoals, BEAT, fixForgottenWalk] },
     { at: "23:10", title: "Day closed", focus: ["#tomorrow", "#assistant"],
       text: "The wearable reports lights out. The agent sends the recap and plans tomorrow's wake-up time, with the reason.",
       point: "Closes the loop and plans tomorrow.",
-      steps: [showTab("assistant"), jumpTo("23:10"), openTomorrow] },
+      steps: [jumpTo("23:10"), openTomorrow] },
   ];
 
   // The story's captions describe the default day; the owner's own setup is put back on exit.
@@ -80,7 +93,7 @@
   async function playSteps(steps, token, fast) {
     for (const step of steps) {
       if (token !== run) return;
-      if (step === BEAT) { if (!fast) await sleep(BEAT_MS); } else await step();
+      if (step === BEAT) { if (!fast) await sleep(BEAT_MS); } else await step(fast, token);
     }
   }
 

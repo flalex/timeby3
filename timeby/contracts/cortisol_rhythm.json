@@ -2,6 +2,7 @@
   "id": "cortisol_rhythm",
   "name": "Cortisol rhythm",
   "domain": "hormones",
+  "context_hint": "Chronotype (early bird / night owl), commute, when you can get outside, how you sleep.",
   "goal": "High cortisol after waking (strong cortisol awakening response), low cortisol before sleep.",
   "sources": {
     "fries2009": "Fries E, Dettenborn L, Kirschbaum C. The cortisol awakening response (CAR): facts and future directions. Int J Psychophysiol, 2009.",

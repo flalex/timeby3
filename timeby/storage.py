@@ -1,0 +1,94 @@
+"""Live-mode persistence: one human-readable JSON file per logical day plus `settings.json`.
+
+<data dir>/2026-10-19.json  — that day's events, notes and which reminders were already sent
+<data dir>/settings.json    — the owner's times, weekday overrides, switched-off agents/goals, AI context
+The data dir is `TIMEBY_DATA_DIR`, or `data/live` in the repo (git-ignored).
+"""
+from __future__ import annotations
+
+import json
+import os
+from datetime import date, datetime
+from pathlib import Path
+
+from .assistant import Assistant
+from .model import Event
+from .personal import DAY_ORDER, parse_times
+
+DEFAULT_DIR = Path(os.environ.get("TIMEBY_DATA_DIR") or Path(__file__).resolve().parent.parent / "data" / "live")
+SETTINGS = "settings.json"
+
+
+def _key(contract_id: str, rule_id: str) -> str:
+    return f"{contract_id}/{rule_id}"
+
+
+def _unkey(key: str) -> tuple[str, str]:
+    contract_id, rule_id = key.split("/", 1)
+    return contract_id, rule_id
+
+
+class LiveStore:
+    def __init__(self, root: Path = DEFAULT_DIR):
+        self.root = Path(root)
+
+    # --- save -----------------------------------------------------------------------------
+
+    def save(self, assistant: Assistant, day: date) -> None:
+        self._write(SETTINGS, self._settings(assistant))
+        self._write(f"{day.isoformat()}.json", self._day(assistant, day))
+
+    def _settings(self, a: Assistant) -> dict:
+        return {
+            "profile": {name: f"{a.profile.anchors[name].time:%H:%M}" for name in DAY_ORDER},
+            "day_overrides": {_key(*k): list(v) for k, v in a.day_overrides.items()},
+            "disabled_agents": sorted(a.disabled_contracts),
+            "disabled_goals": sorted(_key(*k) for k in a.disabled_rules),
+            "agent_context": a.agent_context,
+        }
+
+    def _day(self, a: Assistant, day: date) -> dict:
+        on_day = lambda keys: sorted(list(k[1:]) for k in keys if k[0] == day)
+        return {
+            "day": day.isoformat(),
+            "events": [{"action": e.action, "at": e.at.isoformat(timespec="minutes"), "goal": e.goal}
+                       for e in a.events if a.ctx.logical_day(e.at) == day],
+            "notes": {_key(*k): note for k, note in a.notes_for(day).items()},
+            "sent": on_day(a.sent),
+            "delivered": on_day(a.delivered),
+            "skipped": on_day(a.skipped),
+        }
+
+    def _write(self, name: str, payload: dict) -> None:
+        self.root.mkdir(parents=True, exist_ok=True)
+        tmp = self.root / f".{name}.tmp"
+        tmp.write_text(json.dumps(payload, indent=2, ensure_ascii=False))
+        tmp.replace(self.root / name)  # atomic: a crash never leaves a half-written day
+
+    # --- load -----------------------------------------------------------------------------
+
+    def restore(self, assistant: Assistant) -> None:
+        """Put saved settings and every saved day back into a fresh assistant."""
+        if (self.root / SETTINGS).is_file():
+            self._restore_settings(assistant, json.loads((self.root / SETTINGS).read_text()))
+        for path in sorted(self.root.glob("????-??-??.json")):
+            self._restore_day(assistant, json.loads(path.read_text()))
+        assistant.events.sort(key=lambda e: e.at)
+
+    @staticmethod
+    def _restore_settings(a: Assistant, s: dict) -> None:
+        if s.get("profile"):
+            a.set_profile(parse_times(s["profile"]))
+        a.day_overrides = {_unkey(k): tuple(v) for k, v in s.get("day_overrides", {}).items()}
+        a.disabled_contracts = set(s.get("disabled_agents", []))
+        a.disabled_rules = {_unkey(k) for k in s.get("disabled_goals", [])}
+        a.agent_context = dict(s.get("agent_context", {}))
+
+    @staticmethod
+    def _restore_day(a: Assistant, d: dict) -> None:
+        day = date.fromisoformat(d["day"])
+        a.events += [Event(e["action"], datetime.fromisoformat(e["at"]), e.get("goal")) for e in d.get("events", [])]
+        a.notes |= {(day, *_unkey(k)): note for k, note in d.get("notes", {}).items()}
+        a.sent |= {(day, *k) for k in map(tuple, d.get("sent", []))}
+        a.delivered |= {(day, *k) for k in map(tuple, d.get("delivered", []))}
+        a.skipped |= {(day, *k) for k in map(tuple, d.get("skipped", []))}

@@ -37,6 +37,7 @@ class Assistant:
         self.notes: dict[tuple[date, str, str], dict] = {}  # owner's duration/comment per goal per day
         self.late_starts: dict[date, RecoveryPlan] = {}       # recovery plan of a day that started late
         self.skipped: set[tuple[date, str, str]] = set()      # goals the recovery plan dropped (no reminders)
+        self.agent_context: dict[str, str] = {}               # owner's extra context per agent (AI recommendations)
         self.actions = actions
         self.notifier = notifier
         self.wake_anchor = wake_anchor
@@ -44,7 +45,7 @@ class Assistant:
         self.wait_for_observed = wait_for_observed
         self.compact_routines = compact_routines  # on when the client already shows the day's items
         self.events: list[Event] = []
-        self._sent: set[tuple] = set()
+        self.sent: set[tuple] = set()  # (day, kind, contract_id, rule_id) already handled — persisted in live mode
         self._snoozed: dict[tuple, datetime] = {}
         self._mentioned: dict[tuple, datetime] = {}
         self.delivered: set[tuple] = set()  # (day, contract_id, rule_id) of reminders actually sent
@@ -143,12 +144,12 @@ class Assistant:
             if now < snoozed_until:
                 return False
             del self._snoozed[rule_key]
-        elif key in self._sent:
+        elif key in self.sent:
             return False
         elif now - self._mentioned.get(rule_key, datetime.min) < MENTION_COOLDOWN:
-            self._sent.add(key)  # covered by a recent message: drop it, don't postpone it
+            self.sent.add(key)  # covered by a recent message: drop it, don't postpone it
             return False
-        self._sent.add(key)
+        self.sent.add(key)
         self.delivered.add(rule_key)
         for mentioned in [rule_key, *((day, c, r) for c, r in m.meta.get("mentions", ()))]:
             self._mentioned[mentioned] = now

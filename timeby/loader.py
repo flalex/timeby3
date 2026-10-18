@@ -43,6 +43,7 @@ def parse_contract(raw: dict, actions: dict[str, str]) -> Contract:
         phases=tuple(Phase(p["id"], p["goal"], _window(p["window"])) for p in raw["phases"]),
         rules=tuple(_rule(r) for r in raw["rules"]),
         sources=raw["sources"],
+        context_hint=raw.get("context_hint", ""),
     )
     _validate(contract, actions)
     return contract

@@ -87,6 +87,7 @@ class Contract:
     phases: tuple[Phase, ...]
     rules: tuple[Rule, ...]
     sources: dict[str, str]
+    context_hint: str = ""  # what extra context the owner can give this agent's AI recommendations
 
 
 @dataclass(frozen=True)

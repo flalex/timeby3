@@ -2,6 +2,7 @@
   "id": "business",
   "name": "Business",
   "domain": "business",
+  "context_hint": "Current priorities and deadlines, meetings pattern, what development and marketing work is on now.",
   "goal": "Protect a daily focused block for development and a fixed slot for marketing.",
   "sources": {
     "mark2008": "Mark G, Gudith D, Klocke U. The cost of interrupted work: more speed and stress. Proc CHI, 2008.",

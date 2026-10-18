@@ -569,3 +569,60 @@ def test_busy_op_loads_sample_meetings_and_marks_calendar_connected():
     assert next(c for c in state["connectors"] if c["id"] == "calendar")["status"] == "connected"
     s.jump("05:00")  # replaying the day keeps the meetings
     assert s.assistant.busy and handle(s, "busy", {"clear": True})["state"]["busy"] == []
+
+
+# --- live data on disk ----------------------------------------------------------------------
+
+def live_sim(store_dir, today=DAY):
+    from timeby.server import Simulation
+    from timeby.storage import LiveStore
+    s = Simulation(wait_for_observed=True, compact_routines=True, today=today, live=True, store=LiveStore(store_dir))
+    s.now = at("09:00", today)
+    return s
+
+
+def test_live_data_is_saved_one_file_per_day_and_restored(tmp_path):
+    import json
+    from timeby.server import handle
+    s = live_sim(tmp_path)
+    s.sync = lambda: []  # freeze the real clock for the test
+    handle(s, "log", {"action": "caffeine"})
+    handle(s, "edit", {"contract_id": "nutrition", "rule_id": "regular_breakfast", "happened": True,
+                       "at": "08:10", "duration": "25", "comment": "porridge"})
+    handle(s, "context", {"contract_id": "fitness", "text": "Sore left knee"})
+    handle(s, "toggle", {"contract_id": "business", "on": False})
+    day_file = json.loads((tmp_path / f"{DAY.isoformat()}.json").read_text())
+    assert [e["action"] for e in day_file["events"]] == ["meal", "caffeine"]
+    assert day_file["notes"]["nutrition/regular_breakfast"]["comment"] == "porridge"
+    settings = json.loads((tmp_path / "settings.json").read_text())
+    assert settings["agent_context"]["fitness"] == "Sore left knee" and settings["disabled_agents"] == ["business"]
+
+    again = live_sim(tmp_path)  # a server restart
+    assert {e.action for e in again.assistant.events} == {"meal", "caffeine"}
+    assert again.assistant.agent_context["fitness"] == "Sore left knee"
+    assert not again.assistant.is_enabled("business")
+    assert result_of(again.assistant, "regular_breakfast", at("09:00")).hit_at == at("08:10")
+
+
+def test_recommendations_live_only_and_explain_missing_sdk(tmp_path, monkeypatch):
+    import sys
+    from timeby.ai import AiUnavailable
+    from timeby.server import Simulation, recommend
+    demo = Simulation(wait_for_observed=True, compact_routines=True, today=DAY)
+    with pytest.raises(ValueError, match="live mode only"):
+        recommend(demo, "fitness")
+    monkeypatch.setitem(sys.modules, "anthropic", None)  # SDK not installed
+    with pytest.raises(AiUnavailable, match="pip install"):
+        recommend(live_sim(tmp_path), "fitness")
+
+
+def test_each_agent_has_its_own_recommender_with_grounded_prompt(tmp_path, monkeypatch):
+    from timeby import ai
+    sent = {}
+    monkeypatch.setattr(ai, "_ask_claude", lambda system, prompt: sent.update(system=system, prompt=prompt) or "• Walk")
+    s = live_sim(tmp_path)
+    s.assistant.agent_context["fitness"] = "Sore left knee"
+    recommender, facts, context = s.recommendation_input("fitness")
+    assert recommender is ai.recommend_fitness and recommender(facts, context) == "• Walk"
+    assert "fitness coach" in sent["system"] and "Sore left knee" in sent["prompt"] and "Workout" in sent["prompt"]  # Friday: workout day
+    assert set(ai.RECOMMENDERS) == {c.id for c in load_contracts()}  # one function per agent

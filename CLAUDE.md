@@ -43,6 +43,11 @@ scoring of situation/state) must be deterministic and grounded — never random,
   is still asleep only the wake-up call is sent. Late-but-done earns `late_credit` (default 0.5, status LATE).
   Rules can declare `pairs` (goals to do together), `topic` (grouping), `remind: false` (companion goals).
 - `connectors.py`: declared connectors (calendar, fitness tracker, location) — UI only, not implemented.
+- Demo readiness (see `docs/next/`): `web/story.js` = Story mode (6 chapters on the real engine; uses the default
+  day, restores the owner's setup on exit); `personal.py` + `web/setup.js` = "Your day" times and per-agent weekdays
+  (`Assistant.set_profile/set_days`, survive resets); `calendar_ics.py` + `calendar_feed.py` + `web/calendar.js` =
+  `/calendar.ics` plan feed and meetings that hold reminders until they end (`Assistant.set_busy`).
+  Feature scripts are served from `/static/<name>.js` and rely on v3.html globals.
 - Agents = contracts, goals = rules. `Assistant.set_enabled(contract_id, on, rule_id=None)` switches either off;
   `Assistant.active` (enabled agents with enabled goals only) is what status/tick/plan see, so off = fully silent.
 - `timeby/server.py` + `timeby/web/index.html` — interactive simulator: simulated clock, simulated sensors

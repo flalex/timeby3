@@ -63,8 +63,13 @@
       steps: [showTab("assistant"), jumpTo("23:10"), openTomorrow] },
   ];
 
+  // The story's captions describe the default day; the owner's own setup is put back on exit.
+  const STORY_DAY = { wake: "07:00", breakfast: "07:45", lunch: "12:30", dinner: "19:00", sleep: "23:00" };
+  let ownerDay = null;
+
   async function startStory() {
     $("scenario").value = SCENARIO;
+    await post("profile", { anchors: STORY_DAY });
     await restart();
   }
 
@@ -117,6 +122,7 @@
 
   function start() {
     setPlaying(false);
+    ownerDay = S.profile?.anchors || null;
     autoplay = true;
     chapter = completed = -1;
     document.body.append(card);
@@ -129,6 +135,8 @@
     chapter = completed = -1;
     clearFocus();
     card.remove();
+    if (ownerDay) api("profile", { anchors: ownerDay });
+    ownerDay = null;
   }
 
   // ---------- caption card & highlight ----------

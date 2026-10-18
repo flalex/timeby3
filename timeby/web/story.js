@@ -135,6 +135,7 @@
 
   function start() {
     setPlaying(false);
+    setView("day");  // the story is told on the day timeline
     ownerDay = S.profile?.anchors || null;
     autoplay = true;
     chapter = completed = -1;

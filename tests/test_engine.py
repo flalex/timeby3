@@ -1,3 +1,4 @@
+import json
 from datetime import date, datetime, time, timedelta
 
 import pytest
@@ -622,7 +623,166 @@ def test_each_agent_has_its_own_recommender_with_grounded_prompt(tmp_path, monke
     monkeypatch.setattr(ai, "_ask_claude", lambda system, prompt: sent.update(system=system, prompt=prompt) or "• Walk")
     s = live_sim(tmp_path)
     s.assistant.agent_context["fitness"] = "Sore left knee"
-    recommender, facts, context = s.recommendation_input("fitness")
+    recommender, facts, context, voice = s.recommendation_input("fitness")
     assert recommender is ai.recommend_fitness and recommender(facts, context) == "• Walk"
     assert "fitness coach" in sent["system"] and "Sore left knee" in sent["prompt"] and "Workout" in sent["prompt"]  # Friday: workout day
     assert set(ai.RECOMMENDERS) == {c.id for c in load_contracts()}  # one function per agent
+
+
+# --- assistant tone ---------------------------------------------------------------------------
+
+def test_tone_changes_voice_not_facts():
+    a = v3_assistant()
+    a.log("wake", at("07:00"))
+    plain = next(m.text for m in a.tick(at("07:10")) if m.rule_id == "morning_light")
+    for tone_id, marker in [("buddy", "Yo!"), ("mentor", "Do it now"), ("caring", "gentle reminder"),
+                            ("scientific", "[Evidence: moderate; Leproult 2001; Thorn 2004]")]:
+        b = v3_assistant()
+        b.set_tone(tone_id)
+        b.log("wake", at("07:00"))
+        styled = next(m.text for m in b.tick(at("07:10")) if m.rule_id == "morning_light")
+        assert plain in styled and marker in styled, tone_id
+
+
+def test_tone_frames_brief_and_warnings_and_rejects_unknown():
+    a = v3_assistant()
+    a.set_tone("buddy")
+    a.log("wake", at("07:00"))
+    assert next(m.text for m in a.tick(at("07:00")) if m.kind == "brief").startswith("Morning, legend")
+    [warning] = a.log("caffeine", at("18:00"))
+    assert warning.text.startswith("Bro, heads up") and "Why it matters" in warning.text
+    with pytest.raises(ValueError):
+        a.set_tone("pirate")
+
+
+def test_tone_is_saved_in_live_settings_and_reaches_claude(tmp_path):
+    from timeby.server import handle
+    s = live_sim(tmp_path)
+    s.sync = lambda: []
+    handle(s, "tone", {"tone": "mentor"})
+    assert live_sim(tmp_path).assistant.tone == "mentor"
+    *_, voice = s.recommendation_input("fitness")
+    assert "mentor" in voice
+
+
+# --- Telegram messenger -------------------------------------------------------------------
+
+class FakeTelegram:
+    """Stands in for the Bot API: records sent messages, answers getMe / getUpdates."""
+    def __init__(self, updates=None):
+        self.sent, self.updates = [], updates if updates is not None else [{"message": {"chat": {"id": 42, "first_name": "Alex"}}}]
+
+    def __call__(self, token, method, params=None):
+        from timeby.telegram import TelegramError
+        if token != "good-token":
+            raise TelegramError("Telegram didn't accept this token — copy it again from @BotFather.")
+        if method == "sendMessage":
+            self.sent.append(params)
+        return {"getMe": {"username": "timeby_alex_bot"}, "getUpdates": self.updates}.get(method, {})
+
+
+def test_telegram_setup_flow_and_token_never_reaches_the_ui(monkeypatch):
+    from timeby import telegram
+    from timeby.telegram import TelegramChannel, TelegramError
+    fake = FakeTelegram()
+    monkeypatch.setattr(telegram, "_call", fake)
+    ch = TelegramChannel()
+    with pytest.raises(TelegramError, match="didn't accept"):
+        ch.connect("bad-token")
+    ch.connect("good-token")
+    ch.find_chat()
+    ch.send_now("hi")
+    assert ch.ready and ch.chat_name == "Alex" and fake.sent == [{"chat_id": 42, "text": "hi"}]
+    assert "good-token" not in json.dumps(ch.public())
+
+
+def test_telegram_needs_start_pressed_before_finding_chat(monkeypatch):
+    from timeby import telegram
+    from timeby.telegram import TelegramChannel, TelegramError
+    monkeypatch.setattr(telegram, "_call", FakeTelegram(updates=[]))
+    ch = TelegramChannel()
+    ch.connect("good-token")
+    with pytest.raises(TelegramError, match="press Start"):
+        ch.find_chat()
+
+
+class SyncThread:
+    """Runs a background send immediately, so the test can see it."""
+    def __init__(self, target, args=(), daemon=None):
+        self.target, self.args = target, args
+
+    def start(self):
+        self.target(*self.args)
+
+
+def test_live_forwards_by_delivery_choice_and_demo_never_sends(tmp_path, monkeypatch):
+    from timeby import telegram
+    from timeby.server import Simulation
+    from timeby.telegram import TelegramChannel
+    fake = FakeTelegram()
+    monkeypatch.setattr(telegram, "_call", fake)
+    monkeypatch.setattr(telegram.threading, "Thread", SyncThread)
+    s = live_sim(tmp_path)
+    s.telegram = TelegramChannel(token="good-token", bot="b", chat_id=42, delivery="important")
+    s.log("caffeine")  # 09:00: allowed, nothing to send
+    s.now = at("18:00")
+    s.log("caffeine")  # breaks the cut-off -> one alert
+    demo = Simulation(wait_for_observed=True, compact_routines=True, today=DAY)
+    demo.telegram = TelegramChannel(token="good-token", bot="b", chat_id=42, delivery="all")
+    demo.now = at("18:00")
+    demo.log("caffeine")
+    assert len(fake.sent) == 1 and "caffeine" in fake.sent[0]["text"].lower()
+
+
+def test_telegram_settings_survive_restart(tmp_path):
+    from timeby.telegram import TelegramChannel
+    s = live_sim(tmp_path)
+    s.telegram = TelegramChannel(token="good-token", bot="b", chat_id=42, chat_name="Alex", delivery="all")
+    s.persist()
+    assert live_sim(tmp_path).telegram.ready and live_sim(tmp_path).telegram.delivery == "all"
+
+
+# --- weekly view --------------------------------------------------------------------------
+
+WED = date(2026, 10, 21)  # a Wednesday: Mon and Tue are past, Thu–Sun ahead
+
+
+def week_of(a, now):
+    from timeby.week import build_week
+    w = build_week(a, now)
+    return w, {g["id"]: g for agent in w["agents"] for g in agent["goals"]}
+
+
+def test_week_progress_counts_done_out_of_judged_like_2_of_3():
+    a = v3_assistant()
+    a.log("wake", at("07:00", WED - timedelta(days=2)))  # Mon on time
+    a.log("wake", at("08:40", WED - timedelta(days=1)))  # Tue overslept: late, not a proper wake-up
+    a.log("wake", at("07:05", WED))                      # Wed on time
+    w, goals = week_of(a, at("10:00", WED))
+    wake = goals["consistent_wake"]
+    assert [d["label"] for d in w["days"]] == ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] and w["days"][2]["today"]
+    assert wake["cells"][:3] == ["done", "late", "done"] and (wake["done"], wake["judged"]) == (2, 3)
+    assert wake["cells"][3:] == ["planned"] * 4
+
+
+def test_week_target_states_explain_why_today_or_tomorrow_matters():
+    from timeby.week import Progress, _verdict
+    mon, wed, fri = WED - timedelta(days=2), WED, WED + timedelta(days=2)
+    assert _verdict(Progress(2, 2, [fri], 2), wed)[0] == "met"
+    state, note = _verdict(Progress(0, 1, [wed, fri], 2), wed)  # workout: missed Mon, need Wed and Fri
+    assert state == "critical" and "today, Fri" in note
+    state, note = _verdict(Progress(1, 1, [wed, fri], 1), wed)
+    assert state == "met"
+    state, note = _verdict(Progress(0, 0, [wed, fri], 1), wed)  # one of two left: do it today or Fri becomes critical
+    assert state == "at_risk" and note == "Do it today — otherwise Fri becomes critical."
+    assert _verdict(Progress(0, 2, [fri], 2), wed)[0] == "out_of_reach"
+
+
+def test_week_uses_weekly_targets_and_weekday_plans():
+    a = v3_assistant()
+    w, goals = week_of(a, at("10:00", WED))
+    workout = goals["workout"]  # Mon, Wed, Fri; WHO: 2 a week
+    assert workout["target"] == 2 and [c is not None for c in workout["cells"]] == [True, False, True, False, True, False, False]
+    assert "WHO" in workout["why"]
+    assert goals["regular_lunch"]["target"] == 5  # daily goal: most days
+    assert any(f["id"] == "workout" for f in w["focus"])  # critical and doable today

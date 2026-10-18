@@ -6,6 +6,7 @@ from datetime import date, datetime, timedelta
 from typing import Protocol
 
 from . import engine, intents, narration, personal
+from . import tone as tones
 from .recovery import RecoveryPlan, build_recovery
 from .model import Contract, ContractReport, Event, Message, Profile, Recommendation, Rule, RuleKind, RuleResult
 
@@ -38,6 +39,7 @@ class Assistant:
         self.late_starts: dict[date, RecoveryPlan] = {}       # recovery plan of a day that started late
         self.skipped: set[tuple[date, str, str]] = set()      # goals the recovery plan dropped (no reminders)
         self.agent_context: dict[str, str] = {}               # owner's extra context per agent (AI recommendations)
+        self.tone = tones.DEFAULT                              # voice of every message (facts never change)
         self.actions = actions
         self.notifier = notifier
         self.wake_anchor = wake_anchor
@@ -309,9 +311,21 @@ class Assistant:
     def _reply(self, at: datetime, text: str) -> list[Message]:
         return self._send([Message(at, "reply", "", "", text)])
 
+    def set_tone(self, tone_id: str) -> None:
+        if tone_id not in tones.TONES:
+            raise ValueError(f"unknown tone '{tone_id}'")
+        self.tone = tone_id
+
     def _send(self, messages: list[Message]) -> list[Message]:
-        for m in messages:
+        styled = [self._in_tone(m) for m in messages]
+        for m in styled:
             if m.rule_id and m.contract_id:
                 self._last_rule = (m.contract_id, m.rule_id)
             self.notifier.send(m)
-        return messages
+        return styled
+
+    def _in_tone(self, m: Message) -> Message:
+        contract = next((c for c in self.contracts if c.id == m.contract_id), None)
+        rule = next((r for r in contract.rules if r.id == m.rule_id), None) if contract else None
+        text = tones.style(self.tone, m.kind, m.text, rule, contract.sources if contract else None, m.meta.get("status"))
+        return m if text == m.text else replace(m, text=text)

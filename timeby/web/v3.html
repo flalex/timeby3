@@ -62,6 +62,7 @@ body.live .demo-only { display: none !important; }
 .ltabs button.on { background: var(--surface-2); color: var(--ink); }
 #lpane-agents[hidden], #lpane-connectors[hidden] { display: none; }
 .topic { font-size: 11px; font-weight: 700; color: var(--faint); text-transform: uppercase; letter-spacing: .06em; padding: 8px 0 2px; list-style: none; }
+.conn-group { font-size: 11px; font-weight: 700; color: var(--faint); text-transform: uppercase; letter-spacing: .06em; padding: 12px 0 0; }
 .conn { border-top: 1px solid var(--line); padding: 12px 0; display: grid; grid-template-columns: 30px 1fr; gap: 4px 10px; }
 .conn .ic { font-size: 20px; }
 .conn .top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
@@ -106,6 +107,7 @@ body.live .demo-only { display: none !important; }
 .insight .st.late { color: var(--warn); }
 .rule .dot.late { background: var(--warn); }
 .insight .hist, .insight .ev { margin-top: 6px; }
+.insight .frac { font-weight: 600; font-variant-numeric: tabular-nums; color: var(--muted); margin-left: 4px; }
 .ai { margin: 8px 0 4px; display: grid; gap: 6px; }
 .ai .btn { justify-self: start; padding: 6px 12px; font-size: 13px; }
 .ai-hint { font-size: 12px; color: var(--faint); }
@@ -302,6 +304,12 @@ body.live .demo-only { display: none !important; }
   position: sticky; top: 76px; height: calc(100vh - 100px); min-height: 480px; overflow: hidden; transition: box-shadow .3s; }
 @media (max-width: 860px) { .assistant { position: static; height: 70vh; } }
 .assistant.flash { box-shadow: 0 0 0 2px var(--accent), var(--shadow); }
+main { min-width: 0; }  /* let wide content (the week grid) scroll inside instead of widening the page */
+.viewbar { display: flex; justify-content: flex-start; margin: 0 0 14px; }
+.seg { display: inline-flex; background: var(--surface); border-radius: 10px; padding: 3px; box-shadow: var(--shadow); }
+.seg button { border: 0; background: none; padding: 6px 18px; border-radius: 8px; font-size: 14px; font-weight: 600; color: var(--muted); }
+.seg button.on { background: var(--ink); color: var(--surface); }
+body.week .day-only { display: none !important; }
 .side-head { padding: 14px 16px 12px; border-bottom: 1px solid var(--line); display: grid; gap: 2px; }
 .side-head b { font-size: 15px; }
 .side-head span { font-size: 12px; color: var(--muted); }
@@ -383,12 +391,15 @@ body.live .demo-only { display: none !important; }
 
   <main id="main">
     <div class="notice" id="notice" hidden></div>
-    <section id="now-card"></section>
-    <div class="section-h timeline-h"><span>Timeline</span>
+    <div class="viewbar"><div class="seg" id="viewseg" role="tablist" aria-label="View">
+      <button data-view="day" role="tab">Day</button><button data-view="week" role="tab">Week</button></div></div>
+    <section id="now-card" class="day-only"></section>
+    <div class="section-h timeline-h day-only"><span>Timeline</span>
       <div class="head-actions"><span id="fold-slot"></span><button class="btn secondary" id="log-btn">+ Log</button>
         <div class="menu" id="menu" hidden></div></div>
     </div>
-    <section id="timeline"></section>
+    <section id="timeline" class="day-only"></section>
+    <section id="week" hidden></section>
   </main>
 
   <aside class="assistant" id="assistant">
@@ -431,6 +442,14 @@ const dayMin = (hhmm) => { const [h, m] = hhmm.split(":").map(Number); return (h
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
 let S = null, playing = false, inflight = false, acc = 0;
+const VIEW_KEY = "timeby.view";
+let view = (() => { try { return localStorage.getItem(VIEW_KEY) === "week" ? "week" : "day"; } catch { return "day"; } })();
+
+function setView(v) {
+  view = v;
+  try { localStorage.setItem(VIEW_KEY, v); } catch { /* storage blocked: the view just won't be remembered */ }
+  render();
+}
 let showAllEarlier = false, openWhy = null, toastTimer = null, editing = null, tomorrowOpen = false, lateOpen = false, ltab = "agents";
 const openAgents = new Set();  // agents whose goal list is unfolded
 
@@ -534,9 +553,13 @@ function renderAgents() {
 
 function agentCard(a, report) {
   const open = openAgents.has(a.id), on = a.goals.filter((g) => g.enabled).length;
-  const score = a.enabled && report?.score != null ? `<span class="mini ${scoreTone(report.score)}" title="Today's score">${report.score}</span>` : "";
+  const weekly = view === "week" ? S.week?.agents.find((w) => w.id === a.id) : null;
+  if (weekly) report = { ...report, weekly };
+  const score = !a.enabled ? "" : weekly ? weeklyBadge(weekly)
+    : report?.score != null ? `<span class="mini ${scoreTone(report.score)}" title="Today's score">${report.score}</span>` : "";
   const domain = a.domain.toLowerCase() === a.name.toLowerCase() ? "" : `${esc(a.domain[0].toUpperCase() + a.domain.slice(1))} · `;
-  const body = a.enabled && report ? agentInsight(a, report) : `<p class="paused">Paused — switch it on to plan and score its goals.</p>`;
+  const body = !a.enabled || !report ? `<p class="paused">Paused — switch it on to plan and score its goals.</p>`
+    : report.weekly ? weeklyInsight(a, report.weekly) : agentInsight(a, report);
   return `<div class="agent ${a.enabled ? "" : "off"} ${open ? "open" : ""}">
     <div class="agent-head">
       <button class="fold-agent" data-fold="${a.id}" aria-expanded="${open}" title="${open ? "Hide" : "Show"} insights">
@@ -576,6 +599,35 @@ function agentInsight(a, report) {
     <div class="rules">${rules}</div>`;
 }
 
+const pct = (done, judged) => (judged ? Math.round((100 * done) / judged) : null);
+
+function weeklyBadge(w) {
+  const p = pct(w.done, w.judged);
+  return `<span class="mini ${p == null ? "" : scoreTone(p)}" title="On time this week">${w.done}/${w.judged}</span>`;
+}
+
+const WEEK_STATE = { met: ["met", "good"], on_track: ["on track", ""], at_risk: ["at risk", "late"], critical: ["critical", "bad"],
+  out_of_reach: ["out of reach", "bad"], none: ["not planned", ""] };
+
+function weeklyInsight(a, w) {
+  const summary = Object.entries(w.states).filter(([, n]) => n)
+    .map(([state, n]) => `<span class="cnt ${WEEK_STATE[state][1]}">${n} ${WEEK_STATE[state][0]}</span>`).join("");
+  let topic = null;
+  const rules = w.goals.filter((g) => g.planned).map((g) => {
+    const head = g.topic && g.topic !== topic ? `<div class="topic">${esc(g.topic)}</div>` : "";
+    topic = g.topic || topic;
+    const [word, tone] = WEEK_STATE[g.state];
+    return `${head}<details class="rule"><summary><span class="dot ${tone}"></span>
+        <span>${ICONS[g.action] || ""} ${esc(g.label)} <b class="frac">${g.done}/${g.judged}</b></span><span class="st ${tone}">${word}</span></summary>
+      <div class="body">${esc(g.note)}<div class="hist">Target: ${g.target} a week. ${esc(g.why)}</div></div></details>`;
+  }).join("");
+  return `<div class="score-block">${bigRing(pct(w.done, w.judged))}
+      <div><div class="phase">This week · ${w.done} of ${w.judged} on time</div><div class="counts">${summary}</div></div></div>
+    <p class="agoal">${esc(a.goal)}</p>
+    ${LIVE ? aiBlock(a) : ""}
+    <div class="rules">${rules}</div>`;
+}
+
 function bigRing(score) {
   const r = 26, c = 2 * Math.PI * r, v = score == null ? 0 : score / 100;
   return `<div class="big-ring ${score == null ? "" : scoreTone(score)}"><svg viewBox="0 0 64 64">
@@ -607,7 +659,7 @@ async function askClaude(agentId) {
 }
 
 function renderConnectors() {
-  $("connectors").innerHTML = S.connectors.map((c) => `<div class="conn"><span class="ic">${c.icon}</span>
+  $("connectors").innerHTML = S.connectors.map((c, i) => `${c.group !== S.connectors[i - 1]?.group ? `<div class="conn-group">${esc(c.group)}</div>` : ""}<div class="conn"><span class="ic">${c.icon}</span>
     <div><div class="top"><b>${esc(c.name)}</b><span class="st ${c.status === "proposed" ? "proposed" : ""}">${esc(c.status)}</span></div>
       <div class="prov">${esc(c.providers)}</div></div>
     <div class="does">${esc(c.does)}</div>
@@ -830,6 +882,13 @@ function ruleInfo(ruleId) {
 }
 
 function renderChrome() {
+  document.body.classList.toggle("week", view === "week");
+  $("week").hidden = view !== "week";
+  $("viewseg").querySelectorAll("button").forEach((b) => {
+    const on = b.dataset.view === view;
+    b.classList.toggle("on", on);
+    b.setAttribute("aria-selected", on);
+  });
   $("ltabs").querySelectorAll("button").forEach((b) => b.classList.toggle("on", b.dataset.ltab === ltab));
   $("lpane-agents").hidden = ltab !== "agents";
   $("lpane-connectors").hidden = ltab !== "connectors";
@@ -837,6 +896,7 @@ function renderChrome() {
 
 // ---------- static UI ----------
 $("ltabs").querySelectorAll("button").forEach((b) => (b.onclick = () => { ltab = b.dataset.ltab; renderChrome(); }));
+$("viewseg").querySelectorAll("button").forEach((b) => (b.onclick = () => setView(b.dataset.view)));
 $("scenario").onchange = () => restart();
 $("toast").onclick = () => $("toast").classList.remove("show");
 $("menu").innerHTML = Object.entries(SHORT).map(([a, label]) => `<button data-a="${a}">${ICONS[a]} ${label}</button>`).join("");
@@ -902,5 +962,8 @@ if (LIVE) {
 <script src="/static/story.js"></script>
 <script src="/static/setup.js"></script>
 <script src="/static/calendar.js"></script>
+<script src="/static/assistant.js"></script>
+<script src="/static/messenger.js"></script>
+<script src="/static/week.js"></script>
 </body>
 </html>

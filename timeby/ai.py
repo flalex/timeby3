@@ -19,7 +19,8 @@ Rules:
 - Base every recommendation on the facts given; never contradict a goal, its time window or its evidence.
 - Recommend only within this agent's goals. No medical diagnoses; suggest a professional if something sounds clinical.
 - Use the owner's context to personalise; if it conflicts with a goal, say so briefly and offer the closest safe option.
-- Reply with at most 3 recommendations, each one short line starting with "• ", for the rest of today or tomorrow."""
+- Reply with at most 3 recommendations, each one short line starting with "• ", for the rest of today or tomorrow.
+- Voice: {voice}"""
 
 
 class AiUnavailable(RuntimeError):
@@ -28,28 +29,28 @@ class AiUnavailable(RuntimeError):
 
 # --- one function per agent ---------------------------------------------------------------
 
-def recommend_cortisol(facts: str, context: str) -> str:
+def recommend_cortisol(facts: str, context: str, voice: str = "") -> str:
     return _recommend("cortisol rhythm coach",
                       "morning light, wake-up consistency, movement timing, caffeine cut-off and evening wind-down.",
-                      facts, context)
+                      facts, context, voice)
 
 
-def recommend_nutrition(facts: str, context: str) -> str:
+def recommend_nutrition(facts: str, context: str, voice: str = "") -> str:
     return _recommend("nutrition coach",
                       "regular meal times, hydration, vegetables and a protein-rich breakfast.",
-                      facts, context)
+                      facts, context, voice)
 
 
-def recommend_fitness(facts: str, context: str) -> str:
+def recommend_fitness(facts: str, context: str, voice: str = "") -> str:
     return _recommend("fitness coach",
                       "the planned surfing, padel and strength sessions, recovery and timing around sleep.",
-                      facts, context)
+                      facts, context, voice)
 
 
-def recommend_business(facts: str, context: str) -> str:
+def recommend_business(facts: str, context: str, voice: str = "") -> str:
     return _recommend("focus and business coach",
                       "the protected development block and the daily marketing slot.",
-                      facts, context)
+                      facts, context, voice)
 
 
 RECOMMENDERS = {
@@ -76,10 +77,10 @@ def facts_for(report: ContractReport, now: datetime) -> str:
     return "\n".join(lines)
 
 
-def _recommend(role: str, focus: str, facts: str, context: str) -> str:
+def _recommend(role: str, focus: str, facts: str, context: str, voice: str) -> str:
     prompt = (f"<today>\n{facts}\n</today>\n<owner_context>\n{context.strip() or 'none given'}\n</owner_context>\n"
               "What should the owner do next?")
-    return _ask_claude(SYSTEM.format(role=role, focus=focus), prompt)
+    return _ask_claude(SYSTEM.format(role=role, focus=focus, voice=voice or "Clear, neutral and concise."), prompt)
 
 
 def _ask_claude(system: str, prompt: str) -> str:

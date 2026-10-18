@@ -49,6 +49,14 @@ scoring of situation/state) must be deterministic and grounded — never random,
   (`Assistant.set_profile/set_days`, survive resets); the Agents tab shows each agent's insights (score, goals, why); `calendar_ics.py` + `calendar_feed.py` + `web/calendar.js` =
   `/calendar.ics` plan feed and meetings that hold reminders until they end (`Assistant.set_busy`).
   Feature scripts are served from `/static/<name>.js` and rely on v3.html globals.
+- Assistant tone (`tone.py`, ⚙︎ on the Assistant panel, `web/assistant.js`): balanced (default), buddy, scientific,
+  mentor, caring. Fixed templates applied in `Assistant._send`; facts never change; Claude gets the same voice.
+- Messenger: `telegram.py` (stdlib Bot API) — connect bot token, find chat, delivery important/all/off; forwards
+  only in /live (demo sends test messages only); token stays server-side in `data/live/settings.json`.
+- Weekly view (`week.py`, `web/week.js`, Day | Week switch): Mon–Sun per goal from the engine's day results;
+  progress = on-time / judged; rule `weekly_target` (default 5/7 of planned days) → met / on track / at risk /
+  critical / out of reach with the reason; "Needs you today" = critical or at-risk goals still doable today.
+  The v3 demo simulates Wednesday of the current week so the week has a past.
 - Agents = contracts, goals = rules. `Assistant.set_enabled(contract_id, on, rule_id=None)` switches either off;
   `Assistant.active` (enabled agents with enabled goals only) is what status/tick/plan see, so off = fully silent.
 - `timeby/server.py` + `timeby/web/index.html` — interactive simulator: simulated clock, simulated sensors

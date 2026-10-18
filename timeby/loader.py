@@ -78,6 +78,8 @@ def _rule(raw: dict) -> Rule:
         pairs=tuple(Pair(p["with"], p["text"]) for p in raw.get("pairs", ())),
         late_credit=float(raw.get("late_credit", 0.5)),
         remind=bool(raw.get("remind", True)),
+        weekly_target=raw.get("weekly_target"),
+        weekly_why=raw.get("weekly_why", ""),
     )
 
 

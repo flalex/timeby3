@@ -34,8 +34,9 @@ class LiveStore:
 
     # --- save -----------------------------------------------------------------------------
 
-    def save(self, assistant: Assistant, day: date) -> None:
-        self._write(SETTINGS, self._settings(assistant))
+    def save(self, assistant: Assistant, day: date, extra: dict | None = None) -> None:
+        """`extra`: settings that live outside the assistant (e.g. messenger channels)."""
+        self._write(SETTINGS, self._settings(assistant) | (extra or {}))
         self._write(f"{day.isoformat()}.json", self._day(assistant, day))
 
     def _settings(self, a: Assistant) -> dict:
@@ -45,6 +46,7 @@ class LiveStore:
             "disabled_agents": sorted(a.disabled_contracts),
             "disabled_goals": sorted(_key(*k) for k in a.disabled_rules),
             "agent_context": a.agent_context,
+            "tone": a.tone,
         }
 
     def _day(self, a: Assistant, day: date) -> dict:
@@ -67,13 +69,15 @@ class LiveStore:
 
     # --- load -----------------------------------------------------------------------------
 
-    def restore(self, assistant: Assistant) -> None:
-        """Put saved settings and every saved day back into a fresh assistant."""
-        if (self.root / SETTINGS).is_file():
-            self._restore_settings(assistant, json.loads((self.root / SETTINGS).read_text()))
+    def restore(self, assistant: Assistant) -> dict:
+        """Put saved settings and every saved day back into a fresh assistant; returns the raw settings."""
+        settings = json.loads((self.root / SETTINGS).read_text()) if (self.root / SETTINGS).is_file() else {}
+        if settings:
+            self._restore_settings(assistant, settings)
         for path in sorted(self.root.glob("????-??-??.json")):
             self._restore_day(assistant, json.loads(path.read_text()))
         assistant.events.sort(key=lambda e: e.at)
+        return settings
 
     @staticmethod
     def _restore_settings(a: Assistant, s: dict) -> None:
@@ -83,6 +87,7 @@ class LiveStore:
         a.disabled_contracts = set(s.get("disabled_agents", []))
         a.disabled_rules = {_unkey(k) for k in s.get("disabled_goals", [])}
         a.agent_context = dict(s.get("agent_context", {}))
+        a.set_tone(s.get("tone", a.tone))
 
     @staticmethod
     def _restore_day(a: Assistant, d: dict) -> None:

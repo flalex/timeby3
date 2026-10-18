@@ -31,6 +31,9 @@ TYPICAL_WEEK = (  # (action, planned HH:MM, jitter minutes, probability it happe
     ("wake", "07:00", 50, 1.0), ("sunlight", "07:40", 30, 0.4), ("meal", "07:45", 45, 0.7),
     ("caffeine", "08:00", 15, 1.0), ("meal", "12:45", 50, 0.9), ("caffeine", "16:30", 60, 0.6),
     ("meal", "19:30", 60, 1.0), ("screen_bright", "22:00", 40, 0.9), ("sleep", "23:15", 50, 1.0),
+    ("water", "07:15", 20, 0.7), ("protein_meal", "07:50", 30, 0.5), ("exercise_light", "08:40", 40, 0.6),
+    ("dev_work", "09:40", 30, 0.75), ("vegetables", "12:50", 30, 0.6), ("marketing_work", "14:20", 40, 0.6),
+    ("water", "15:00", 60, 0.6), ("vegetables", "19:35", 30, 0.5), ("wind_down", "22:20", 20, 0.4),
 )
 WEARABLE = "wearable"
 CAFE_PAYMENT = "card payment · café"

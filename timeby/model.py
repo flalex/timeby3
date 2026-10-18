@@ -68,6 +68,8 @@ class Rule:
     pairs: tuple[Pair, ...] = () # goals that can be combined with this one when time is short
     late_credit: float = 0.5     # share of the weight earned when done late (doing it late beats skipping)
     remind: bool = True          # False: no own reminder (e.g. raised together with a paired goal)
+    weekly_target: int | None = None  # how many times a week counts as success; None = most planned days
+    weekly_why: str = ""              # why that target (shown in the weekly view)
     lookback_days: int = 7     # regularity only
 
 

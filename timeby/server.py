@@ -16,6 +16,9 @@ from .connectors import CONNECTORS
 from .ai import RECOMMENDERS, AiUnavailable, facts_for
 from .personal import DAY_ORDER, LABELS, parse_times
 from .storage import LiveStore
+from .telegram import TelegramChannel, TelegramError
+from .tone import TONES, style
+from .week import build_week
 from .scenarios import DEFAULT, SCENARIOS, TYPICAL_WEEK, YOU
 from .sleep_plan import plan_wake
 from .today import build_today
@@ -40,11 +43,13 @@ class Outbox:
 
 class Simulation:
     def __init__(self, wait_for_observed: bool = False, compact_routines: bool = False, today: date | None = None,
-                 live: bool = False, store: LiveStore | None = None):
+                 live: bool = False, store: LiveStore | None = None, weekday: int | None = None):
         self.wait_for_observed = wait_for_observed
         self.compact_routines = compact_routines
         self.live = live  # real clock, no history, nothing scripted: the owner tests their own day
+        self.weekday = weekday  # demo: simulate this weekday of the current week (0 = Monday)
         self.store = store  # live mode: the owner's real data, one file per day
+        self.telegram = TelegramChannel()  # messenger channel; survives resets
         self.profile = PROFILE  # the owner's setup survives resets and replays
         self.day_overrides: dict[tuple[str, str], tuple[str, ...]] = {}
         self.meetings: list[calendar_ics.CalEvent] = []  # today's busy times; survive replays of the day
@@ -52,7 +57,7 @@ class Simulation:
         self.reset(today)
 
     def reset(self, today: date | None = None, scenario: str = DEFAULT) -> None:
-        today = today or date.today()
+        today = today or self._default_day()
         self.scenario = SCENARIOS["own" if self.live else scenario]
         self.outbox = Outbox()
         self.assistant = Assistant(self.profile, load_contracts(), load_actions(), self.outbox,
@@ -83,17 +88,23 @@ class Simulation:
                 break
         return out
 
+    def _default_day(self) -> date:
+        today = date.today()
+        return today if self.weekday is None else today + timedelta(days=self.weekday - today.weekday())
+
     # --- live data --------------------------------------------------------------------------
 
     def _restore(self) -> None:
         if not self.store:
             return
-        self.store.restore(self.assistant)
+        settings = self.store.restore(self.assistant)
         self.profile, self.day_overrides = self.assistant.profile, dict(self.assistant.day_overrides)
+        if settings.get("telegram"):
+            self.telegram = TelegramChannel(**settings["telegram"])
 
     def persist(self) -> None:
         if self.live and self.store:
-            self.store.save(self.assistant, self.assistant.ctx.logical_day(self.now))
+            self.store.save(self.assistant, self.assistant.ctx.logical_day(self.now), {"telegram": self.telegram.saved()})
 
     def set_context(self, contract_id: str, text: str) -> None:
         if contract_id not in self._contracts:
@@ -109,7 +120,8 @@ class Simulation:
         report = next((r for r in self.assistant.status(self.now) if r.contract.id == contract_id), None)
         if not report:
             raise ValueError("Switch this agent on to get recommendations.")
-        return RECOMMENDERS[contract_id], facts_for(report, self.now), self.assistant.agent_context.get(contract_id, "")
+        voice = TONES[self.assistant.tone].ai_voice
+        return RECOMMENDERS[contract_id], facts_for(report, self.now), self.assistant.agent_context.get(contract_id, ""), voice
 
     def jump(self, hhmm: str) -> list[dict]:
         """Move the simulated clock to HH:MM today; going back replays the day from the start."""
@@ -218,7 +230,11 @@ class Simulation:
     # --- serialization ----------------------------------------------------------------------
 
     def _flush(self) -> list[dict]:
-        return [self._wrap(m) for m in self.outbox.drain()]
+        messages = self.outbox.drain()
+        if self.live:  # only the real day reaches the phone; a fast-forwarded demo day would spam it
+            for m in messages:
+                self.telegram.forward("alert" if m.meta.get("status") in ("violated", "missed") else m.kind, m.text)
+        return [self._wrap(m) for m in messages]
 
     def _wrap(self, m: Message) -> dict:
         self._msg_id += 1
@@ -271,6 +287,8 @@ class Simulation:
             "scenario": self.scenario.id,
             "scenarios": [{"id": sc.id, "label": sc.label, "description": sc.description} for sc in SCENARIOS.values()],
             "agents": self._agents(),
+            "assistant": self._assistant_settings(),
+            "week": build_week(self.assistant, now),
             "profile": self._profile(),
             "connectors": self._connectors(),
             "busy": [self._busy_block(m) for m in sorted(self.meetings, key=lambda m: m.start)],
@@ -285,6 +303,15 @@ class Simulation:
                  "anchors": self._agent_anchors(c), "context_hint": c.context_hint,
                  "context": a.agent_context.get(c.id, "")}
                 for c in a.contracts]
+
+    def _assistant_settings(self) -> dict:
+        """Current tone plus a preview of the same reminder in every tone."""
+        sample_rule = next(r for c in self.assistant.contracts for r in c.rules if r.id == "morning_light")
+        sources = next(c.sources for c in self.assistant.contracts if sample_rule in c.rules)
+        return {"tone": self.assistant.tone,
+                "tones": [{"id": t.id, "label": t.label, "blurb": t.blurb,
+                           "sample": style(t.id, "nudge", sample_rule.nudge.text, sample_rule, sources)}
+                          for t in TONES.values()]}
 
     def _agent_anchors(self, contract) -> list[dict]:
         """The day times this agent plans around; a time shared with other agents is edited in one place."""
@@ -302,8 +329,9 @@ class Simulation:
     def _connectors(self) -> list[dict]:
         """Each connector with the goals it would automate (from the actions it reads)."""
         goals = [r for c in self.assistant.contracts for r in c.rules if r.kind is not RuleKind.AVOID]
-        return [{"id": k.id, "name": k.name, "icon": k.icon, "providers": k.providers, "does": k.does,
-                 "status": self._connector_status(k), "automates": [r.label for r in goals if set(r.actions) & set(k.reads)]}
+        return [{"id": k.id, "name": k.name, "icon": k.icon, "providers": k.providers, "does": k.does, "group": k.group,
+                 "status": self._connector_status(k), "automates": [r.label for r in goals if set(r.actions) & set(k.reads)],
+                 **({"telegram": self.telegram.public()} if k.id == "telegram" else {})}
                 for k in CONNECTORS]
 
     def _busy_block(self, m: calendar_ics.CalEvent) -> dict:
@@ -312,7 +340,9 @@ class Simulation:
                 "sort": m.start.isoformat(), "phase": phase}
 
     def _connector_status(self, k) -> str:
-        return "connected" if k.id == "calendar" and self.calendar_connected else k.status
+        if k.id == "calendar" and self.calendar_connected or k.id == "telegram" and self.telegram.ready:
+            return "connected"
+        return k.status
 
     # --- v2 read models ---------------------------------------------------------------------
 
@@ -393,7 +423,7 @@ class Simulation:
 
 
 SIMS = {"v1": Simulation(), "v2": Simulation(wait_for_observed=True),
-        "v3": Simulation(wait_for_observed=True, compact_routines=True),
+        "v3": Simulation(wait_for_observed=True, compact_routines=True, weekday=2),  # Wednesday: a week with a past
         "live": Simulation(wait_for_observed=True, compact_routines=True, live=True, store=LiveStore())}
 LOCK = threading.Lock()
 
@@ -430,6 +460,9 @@ def handle(sim: Simulation, op: str, body: dict) -> dict:
     elif op == "busy":
         sim.load_meetings(body)
         messages = []
+    elif op == "tone":
+        sim.assistant.set_tone(body["tone"])
+        messages = []
     elif op == "context":
         sim.set_context(body["contract_id"], body.get("text", ""))
         messages = []
@@ -460,8 +493,31 @@ def static_asset(path: str) -> Path | None:
 def recommend(sim: Simulation, contract_id: str) -> dict:
     """One agent's AI recommendation; the slow Claude call runs outside the lock so the app stays responsive."""
     with LOCK:
-        recommender, facts, context = sim.recommendation_input(contract_id)
-    return {"contract_id": contract_id, "recommendation": recommender(facts, context)}
+        recommender, facts, context, voice = sim.recommendation_input(contract_id)
+    return {"contract_id": contract_id, "recommendation": recommender(facts, context, voice)}
+
+
+TELEGRAM_TEST = "✅ timeby is connected. Your assistant's messages will arrive here."
+
+
+def telegram_op(sim: Simulation, body: dict) -> dict:
+    """Set up the Telegram channel. Network calls run outside the lock; the result is saved in live mode."""
+    channel, action = sim.telegram, body["action"]
+    if action == "connect":
+        channel.connect(body.get("token", ""))
+    elif action == "find_chat":
+        channel.find_chat()
+    elif action == "test":
+        channel.send_now(TELEGRAM_TEST)
+    elif action == "delivery":
+        channel.set_delivery(body["delivery"])
+    elif action == "disconnect":
+        sim.telegram = TelegramChannel()
+    else:
+        raise KeyError(action)
+    with LOCK:
+        sim.persist()
+        return {"messages": [], "state": sim.state(), "live": sim.live}
 
 
 def calendar_text(sim: Simulation) -> str:
@@ -494,10 +550,12 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if op == "recommend":
                 return self._json(200, recommend(SIMS[version], body["contract_id"]))
+            if op == "telegram":
+                return self._json(200, telegram_op(SIMS[version], body))
             with LOCK:
                 result = handle(SIMS[version], op, body)
             self._json(200, result)
-        except AiUnavailable as e:
+        except (AiUnavailable, TelegramError) as e:
             self._json(503, {"error": str(e)})
         except (KeyError, ValueError, StopIteration) as e:
             self._json(400, {"error": str(e)})

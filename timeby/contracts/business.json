@@ -14,7 +14,7 @@
   ],
   "rules": [
     {
-      "id": "development", "title": "Focused development block", "label": "Development", "duration": 120,
+      "id": "development", "title": "Focused development block", "weekly_target": 5, "weekly_why": "Five protected focus blocks a week carry most of the week's real progress.", "label": "Development", "duration": 120,
       "phase": "work", "kind": "do", "actions": ["dev_work"], "window": {"anchor": "wake", "start": 120, "end": 300},
       "weight": 3, "strength": "moderate",
       "why": "Interruptions raise stress and time pressure; experts do their hardest practice in limited, protected morning sessions.",
@@ -23,7 +23,7 @@
       "nudge": {"at": 115, "text": "Focused block starts in 5 minutes: development. Notifications off."}
     },
     {
-      "id": "marketing", "title": "Marketing slot", "label": "Marketing", "duration": 60,
+      "id": "marketing", "title": "Marketing slot", "weekly_target": 4, "weekly_why": "Marketing compounds when it is frequent: at least four slots a week.", "label": "Marketing", "duration": 60,
       "phase": "work", "kind": "do", "actions": ["marketing_work"], "window": {"anchor": "lunch", "start": 60, "end": 240},
       "weight": 2, "strength": "emerging",
       "why": "Doing the same task in the same slot every day makes it automatic faster than doing it whenever there is time.",

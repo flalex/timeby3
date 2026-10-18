@@ -14,7 +14,7 @@
   ],
   "rules": [
     {
-      "id": "surfing", "title": "Weekend surf session", "label": "Surfing", "duration": 90, "days": ["sat", "sun"],
+      "id": "surfing", "title": "Weekend surf session", "weekly_target": 1, "weekly_why": "One session a week keeps the habit and adds vigorous minutes toward the WHO target.", "label": "Surfing", "duration": 90, "days": ["sat", "sun"],
       "phase": "day", "kind": "do", "actions": ["surf"], "window": {"anchor": "wake", "start": 60, "end": 300},
       "weight": 2, "strength": "moderate",
       "why": "Vigorous sessions count double toward the WHO weekly target (75–150 min vigorous); a fixed weekend slot makes it a habit.",
@@ -23,7 +23,7 @@
       "nudge": {"at": 45, "text": "Surf window opens in 15 minutes — wax the board."}
     },
     {
-      "id": "padel", "title": "Padel game", "label": "Padel", "duration": 90, "days": ["tue", "thu"],
+      "id": "padel", "title": "Padel game", "weekly_target": 1, "weekly_why": "One game a week keeps the habit and adds vigorous minutes toward the WHO target.", "label": "Padel", "duration": 90, "days": ["tue", "thu"],
       "phase": "day", "kind": "do", "actions": ["padel"], "window": {"anchor": "dinner", "start": -180, "end": -60},
       "weight": 2, "strength": "moderate",
       "why": "Racket sports showed the strongest association with lower all-cause and cardiovascular mortality among common sports.",
@@ -32,7 +32,7 @@
       "nudge": {"at": -195, "text": "Padel in 15 minutes — grab your racket."}
     },
     {
-      "id": "workout", "title": "Strength workout", "label": "Workout", "duration": 60, "days": ["mon", "wed", "fri"],
+      "id": "workout", "title": "Strength workout", "weekly_target": 2, "weekly_why": "WHO recommends muscle-strengthening activity on at least 2 days a week.", "label": "Workout", "duration": 60, "days": ["mon", "wed", "fri"],
       "phase": "day", "kind": "do", "actions": ["exercise_intense"], "window": {"anchor": "dinner", "start": -180, "end": -60},
       "weight": 2, "strength": "strong",
       "why": "WHO recommends muscle-strengthening activity on 2+ days a week in addition to aerobic activity.",

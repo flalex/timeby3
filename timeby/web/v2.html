@@ -1,0 +1,373 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>timeby simulator v2</title>
+<style>
+:root {
+  --bg: #f4f3ef; --panel: #ffffff; --ink: #1d1d1b; --muted: #6f6e69; --line: #e4e2dc;
+  --accent: #2f6f4f; --accent-soft: #e3efe8; --warn: #b4541a; --warn-soft: #fbeadf;
+  --bad: #b3261e; --bad-soft: #f9e1df; --agent: #f1efe9; --user: #2f6f4f; --user-ink: #fff;
+  --pending: #b9b7b0;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141413; --panel: #1e1e1c; --ink: #ecebe6; --muted: #9b9a94; --line: #2f2f2c;
+    --accent: #6cc196; --accent-soft: #1f3529; --warn: #f0a46c; --warn-soft: #3a2a1d;
+    --bad: #f2867d; --bad-soft: #3d2220; --agent: #272725; --user: #3c8a63; --user-ink: #fff;
+    --pending: #5a5955;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink);
+  font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif; }
+header { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; padding: 14px 20px;
+  border-bottom: 1px solid var(--line); background: var(--panel); position: sticky; top: 0; z-index: 2; }
+.brand { font-weight: 700; font-size: 16px; letter-spacing: -0.01em; }
+.brand small { font-weight: 400; color: var(--muted); margin-left: 6px; }
+.clock { font: 600 28px/1 ui-monospace, "SF Mono", Menlo, monospace; font-variant-numeric: tabular-nums; }
+.day { color: var(--muted); font-size: 12px; }
+.controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-left: auto; }
+button, select { font: inherit; border: 1px solid var(--line); background: var(--panel); color: var(--ink);
+  border-radius: 8px; padding: 6px 10px; cursor: pointer; }
+button:hover { border-color: var(--muted); }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; min-width: 84px; }
+label.toggle { display: flex; gap: 6px; align-items: center; color: var(--muted); font-size: 13px; cursor: pointer; }
+
+.ver { font-size: 11px; background: var(--accent); color: #fff; border-radius: 6px; padding: 1px 6px; vertical-align: 2px; }
+.nav { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.nav a { color: var(--accent); }
+
+/* Now card: pinned at the top of the phone */
+.nowcard { margin: 10px 12px 0; border: 1.5px solid var(--accent); border-radius: 16px; padding: 12px 14px; background: var(--panel); }
+.nowcard .label { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); font-weight: 700;
+  display: flex; justify-content: space-between; }
+.nowcard .label span { color: var(--muted); font-weight: 400; letter-spacing: 0; text-transform: none; }
+.nowcard .title { font-size: 16px; font-weight: 650; margin: 6px 0 2px; }
+.nowcard .advice { font-size: 13px; color: var(--muted); }
+.nowcard .due { font-size: 13px; margin-top: 6px; }
+.nowcard .due b { font-variant-numeric: tabular-nums; }
+.nowcard .due.urgent b { color: var(--warn); }
+.nowcard .actions { display: flex; gap: 6px; margin-top: 8px; }
+.nowcard .actions button { font-size: 12px; border-radius: 999px; padding: 4px 10px; }
+.nowcard .also { font-size: 12px; color: var(--muted); margin-top: 8px; border-top: 1px solid var(--line); padding-top: 6px; }
+.pills { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.pill { font-size: 11px; background: var(--warn-soft); color: var(--warn); border-radius: 999px; padding: 2px 8px; }
+.nowcard .clear { font-size: 13px; color: var(--muted); margin-top: 4px; }
+
+/* Today timeline */
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 11px; color: var(--muted); margin: 0 0 10px; }
+.row { display: grid; grid-template-columns: 96px 1fr auto; gap: 4px 10px; padding: 8px 0; border-top: 1px solid var(--line); align-items: start; }
+.row .when { font: 12px ui-monospace, Menlo, monospace; padding-top: 2px; }
+.row .title { font-weight: 550; }
+.row .sub { font-size: 12px; color: var(--muted); }
+.row .chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.chip { font-size: 11px; border: 1px solid var(--line); border-radius: 6px; padding: 1px 6px; white-space: nowrap; }
+.chip.sent { background: var(--accent-soft); border-color: transparent; }
+.chip.off { text-decoration: line-through; color: var(--muted); }
+.row.resolved .title { color: var(--muted); }
+.row.event { grid-template-columns: 96px 1fr; padding: 4px 0; border-top: 1px dashed var(--line); font-size: 12px; color: var(--muted); }
+.status { font-size: 11px; border-radius: 999px; padding: 1px 8px; white-space: nowrap; background: var(--line); color: var(--muted); }
+.status.done, .status.clean { background: var(--accent-soft); color: var(--accent); }
+.status.missed, .status.violated, .status.late { background: var(--bad-soft); color: var(--bad); }
+.status.waiting { background: transparent; border: 1px dashed var(--pending); }
+.nowline { display: flex; align-items: center; gap: 8px; color: var(--accent); font: 600 12px ui-monospace, Menlo, monospace; margin: 4px 0; }
+.nowline::after { content: ""; flex: 1; height: 2px; background: var(--accent); }
+.caption { color: var(--muted); font-size: 12px; margin: -6px 0 12px; }
+.section-head { display: flex; align-items: baseline; gap: 10px; }
+main { display: grid; grid-template-columns: 400px 1fr; gap: 20px; padding: 20px; max-width: 1400px; margin: 0 auto; align-items: start; }
+@media (max-width: 900px) { main { grid-template-columns: 1fr; padding: 16px; } }
+
+.phone { background: var(--panel); border: 1px solid var(--line); border-radius: 28px; display: flex; flex-direction: column;
+  height: calc(100vh - 120px); min-height: 520px; max-height: 760px; overflow: hidden; position: sticky; top: 92px; }
+@media (max-width: 900px) { .phone { position: static; height: 70vh; } }
+.phone-head { padding: 14px 18px; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 10px; }
+.avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--accent); color: #fff;
+  display: grid; place-items: center; font-weight: 700; }
+.phone-head .sub { color: var(--muted); font-size: 12px; }
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin: -4px -16px 14px; padding: 0 12px; overflow-x: auto; }
+.tabs button { border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: none; padding: 10px 12px;
+  color: var(--muted); white-space: nowrap; display: flex; gap: 6px; align-items: center; }
+.tabs button.active { color: var(--ink); border-bottom-color: var(--accent); font-weight: 600; }
+.badge { font: 600 11px ui-monospace, Menlo, monospace; background: var(--accent-soft); color: var(--accent); border-radius: 999px; padding: 1px 7px; }
+.tab-panel[hidden] { display: none; }
+.chat { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 8px; }
+.msg { max-width: 88%; padding: 9px 12px; border-radius: 14px; white-space: pre-wrap; word-wrap: break-word; }
+.msg .meta { font-size: 11px; color: var(--muted); margin-bottom: 3px; display: flex; gap: 6px; }
+.msg.agent { background: var(--agent); align-self: flex-start; border-bottom-left-radius: 4px; }
+.msg.agent.proactive { border-left: 3px solid var(--accent); }
+.msg.agent.last_call { border-left: 3px solid var(--warn); }
+.msg.feedback { background: transparent; border: 1px solid var(--line); align-self: flex-start; font-size: 13px; }
+.msg.feedback.violated, .msg.feedback.missed { background: var(--bad-soft); border-color: transparent; }
+.msg.feedback.done, .msg.feedback.clean { background: var(--accent-soft); border-color: transparent; }
+.msg.user { background: var(--user); color: var(--user-ink); align-self: flex-end; border-bottom-right-radius: 4px; }
+.msg.user .meta { color: rgba(255,255,255,.75); justify-content: flex-end; }
+.msg.sensor { align-self: center; background: transparent; color: var(--muted); font-size: 12px; padding: 2px 8px; }
+.replies { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.replies button { padding: 4px 10px; font-size: 12px; border-radius: 999px; }
+.replies button:disabled { opacity: .45; cursor: default; }
+.quick { display: flex; gap: 6px; overflow-x: auto; padding: 8px 12px 0; scrollbar-width: none; }
+.quick button { white-space: nowrap; font-size: 12px; border-radius: 999px; padding: 5px 10px; }
+form.input { display: flex; gap: 8px; padding: 10px 12px 14px; }
+form.input input { flex: 1; font: inherit; border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px;
+  background: var(--bg); color: var(--ink); min-width: 0; }
+
+
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px; }
+.card h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 10px; font-weight: 600; }
+.score-row { display: flex; align-items: baseline; gap: 10px; }
+.score { font: 700 40px/1 ui-monospace, Menlo, monospace; font-variant-numeric: tabular-nums; }
+.score small { font-size: 14px; color: var(--muted); font-weight: 400; }
+.bar { height: 6px; border-radius: 3px; background: var(--line); margin: 10px 0; overflow: hidden; }
+.bar > div { height: 100%; background: var(--accent); transition: width .4s; }
+.phase { display: inline-block; font-size: 12px; background: var(--accent-soft); color: var(--accent); padding: 2px 8px; border-radius: 999px; }
+.goal { color: var(--muted); font-size: 12px; margin: 6px 0 10px; }
+.rule { display: grid; grid-template-columns: 14px 1fr auto; gap: 8px; padding: 6px 0; border-top: 1px solid var(--line); align-items: start; }
+.dot { width: 10px; height: 10px; border-radius: 50%; margin-top: 5px; background: var(--pending); }
+.dot.done, .dot.clean { background: var(--accent); }
+.dot.missed, .dot.violated { background: var(--bad); }
+.rule .detail { color: var(--muted); font-size: 12px; }
+.tag { font-size: 11px; color: var(--muted); border: 1px solid var(--line); border-radius: 6px; padding: 0 5px; white-space: nowrap; }
+.rec { padding: 8px 10px; border-radius: 8px; background: var(--accent-soft); }
+.rec.avoid { background: var(--warn-soft); }
+.rec b { font-size: 11px; letter-spacing: .05em; }
+.rec .detail { color: var(--muted); font-size: 12px; }
+.timeline .item { display: grid; grid-template-columns: 48px 1fr; gap: 8px; padding: 4px 0; font-size: 13px; }
+.timeline .item.past { color: var(--muted); text-decoration: line-through; text-decoration-color: var(--line); }
+.timeline .t { font-family: ui-monospace, Menlo, monospace; }
+.empty { color: var(--muted); font-size: 13px; }
+.src { font-size: 11px; color: var(--muted); }
+</style>
+</head>
+<body>
+<header>
+  <div><div class="brand">timeby <span class="ver">v2</span><small>simulator · a simulated clock and sensors drive the real assistant</small></div>
+    <div class="nav"><a href="/" target="_top">v1</a> · <a href="/compare" target="_top">compare v1 | v2</a></div></div>
+  <div><div class="clock" id="clock">--:--</div><div class="day" id="day"></div></div>
+  <div class="controls">
+    <button class="primary" id="play">▶ Play</button>
+    <select id="speed" title="Simulated minutes per real second">
+      <option value="2">2 min/s</option><option value="5" selected>5 min/s</option>
+      <option value="15">15 min/s</option><option value="60">1 h/s</option>
+    </select>
+    <button id="next" title="Fast-forward until the assistant speaks up">⏭ Next agent message</button>
+    <label class="toggle"><input type="checkbox" id="pause" checked> Pause when agent speaks</label>
+    <label class="toggle"><input type="checkbox" id="sensors" checked> Simulated sensors</label>
+    <button id="reset">↺ Reset</button>
+  </div>
+</header>
+
+<main>
+  <section class="phone">
+    <div class="phone-head"><div class="avatar">t</div>
+      <div><div><b>timeby</b></div><div class="sub">The owner's phone: a pinned Now card, then the chat where the agent reaches out first.</div></div></div>
+    <div class="nowcard" id="nowcard"></div>
+    <div class="chat" id="chat"></div>
+    <div class="quick" id="quick"></div>
+    <form class="input" id="form">
+      <input id="text" placeholder="e.g. “had a latte”, “status”, “what now”, “why”" autocomplete="off">
+      <button class="primary" style="min-width:auto">Send</button>
+    </form>
+  </section>
+
+  <section class="card">
+    <nav class="tabs" id="tabs"></nav>
+    <div id="panels"></div>
+  </section>
+</main>
+
+<script>
+const ICONS = { wake: "⏰", sunlight: "☀️", bright_light: "💡", screen_bright: "📱", caffeine: "☕",
+  exercise_light: "🚶", exercise_intense: "🏋️", wind_down: "🧘", meal: "🍽", snack: "🍪", sleep: "😴" };
+const KIND_LABEL = { nudge: "🔔 Nudge", last_call: "⏳ Last call", brief: "☀️ Morning brief",
+  recap: "🌙 Day recap", feedback: "", reply: "" };
+const AGENT_INITIATED = new Set(["nudge", "last_call", "brief", "recap"]);
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+let playing = false, inflight = false, acc = 0, actionsRendered = false;
+
+async function api(op, body = {}) {
+  inflight = true;
+  try {
+    const res = await fetch(`/api/v2/${op}`, { method: "POST", body: JSON.stringify(body) });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    data.messages.forEach(addMessage);
+    render(data.state);
+    return data;
+  } finally { inflight = false; }
+}
+
+function addMessage(m) {
+  const el = document.createElement("div");
+  const agentSide = ["nudge", "last_call", "brief", "recap", "reply"].includes(m.kind);
+  el.className = `msg ${agentSide ? "agent" : m.kind} ${m.kind} ${m.status || ""} ${AGENT_INITIATED.has(m.kind) ? "proactive" : ""}`;
+  const label = KIND_LABEL[m.kind];
+  const meta = m.kind === "sensor" ? "" :
+    `<div class="meta"><span>${m.at}</span>${label ? `<span>${label}</span>` : ""}${m.contract ? `<span>· ${esc(m.contract)}</span>` : ""}</div>`;
+  el.innerHTML = `${meta}<div>${esc(m.text)}</div>`;
+  if (m.replies.length) {
+    const box = document.createElement("div");
+    box.className = "replies";
+    m.replies.forEach((r) => {
+      const b = document.createElement("button");
+      b.textContent = r.label;
+      b.onclick = async () => {
+        box.querySelectorAll("button").forEach((x) => (x.disabled = r.op !== "why" || x === b));
+        await api("reply", { op: r.op, contract_id: m.contract_id, rule_id: m.rule_id });
+      };
+      box.appendChild(b);
+    });
+    el.appendChild(box);
+  }
+  $("chat").appendChild(el);
+  $("chat").scrollTop = $("chat").scrollHeight;
+}
+
+function render(s) {
+  $("clock").textContent = s.clock;
+  $("day").textContent = s.day;
+  $("sensors").checked = s.sensors;
+  renderNowCard(s);
+  renderTabs(s);
+  if (!actionsRendered) renderQuickActions(s.actions);
+}
+
+const TABS_KEY = "timeby.v2.tab";
+let activeTab = (() => { try { return localStorage.getItem(TABS_KEY); } catch { return null; } })();
+
+function renderTabs(s) {
+  const tabs = [
+    { id: "today", label: "Today", html: todayPanel(s) },
+    ...s.contracts.map((c) => ({ id: c.id, label: c.name, badge: c.score ?? "—", html: contractPanel(c) })),
+  ];
+  if (!tabs.some((t) => t.id === activeTab)) activeTab = tabs[0].id;
+  $("tabs").innerHTML = tabs.map((t) => `<button data-tab="${t.id}" class="${t.id === activeTab ? "active" : ""}">
+    ${esc(t.label)}${t.badge !== undefined ? `<span class="badge">${t.badge}</span>` : ""}</button>`).join("");
+  $("panels").innerHTML = tabs.map((t) => `<div class="tab-panel" ${t.id === activeTab ? "" : "hidden"}>${t.html}</div>`).join("");
+  $("tabs").querySelectorAll("button").forEach((b) => (b.onclick = () => {
+    activeTab = b.dataset.tab;
+    try { localStorage.setItem(TABS_KEY, activeTab); } catch {}
+    renderTabs(s);
+  }));
+}
+
+// --- Now card ------------------------------------------------------------------------------
+function renderNowCard(s) {
+  const { main, also, avoid } = s.now_card;
+  const label = `<div class="label">Now<span>what the agent raised and is still open</span></div>`;
+  const pills = avoid.length ? `<div class="pills">${avoid.map((a) =>
+    `<span class="pill">${ICONS[a.action] || ""} ${esc(a.title)} · until ${a.until}</span>`).join("")}</div>` : "";
+  if (!main) {
+    const next = s.timeline.find((r) => r.type === "rule" && r.reminder?.state === "scheduled");
+    $("nowcard").innerHTML = `${label}<div class="clear">All clear.${next ? ` Next: ${esc(next.title)} · 🔔 ${next.reminder.at}` : ""}</div>${pills}`;
+    return;
+  }
+  const left = main.minutes_left;
+  $("nowcard").innerHTML = `${label}
+    <div class="title">${ICONS[main.action] || ""} ${esc(main.title)}</div>
+    <div class="advice">${esc(main.advice)}</div>
+    <div class="due ${left <= 15 ? "urgent" : ""}">due <b>${main.due}</b> · ${left >= 0 ? `${left} min left` : `${-left} min late`}</div>
+    <div class="actions">
+      <button data-op="done">✓ Done</button><button data-op="snooze">⏰ 15 min</button><button data-op="why">Why?</button>
+    </div>
+    ${also.length ? `<div class="also">Also open: ${also.map((a) => `${ICONS[a.action] || ""} ${esc(a.title)} · due ${a.due}`).join(" · ")}</div>` : ""}
+    ${pills}`;
+  $("nowcard").querySelectorAll("button").forEach((b) => (b.onclick = () =>
+    api("reply", { op: b.dataset.op, contract_id: main.contract_id, rule_id: main.rule_id })));
+}
+
+// --- Today timeline --------------------------------------------------------------------------
+const RESOLVED = new Set(["done", "clean", "missed", "violated"]);
+
+function todayPanel(s) {
+  const rows = [];
+  let nowPlaced = false;
+  for (const r of s.timeline) {
+    if (!nowPlaced && r.sort[0] > s.now) { rows.push(`<div class="nowline">now ${s.clock}</div>`); nowPlaced = true; }
+    rows.push(r.type === "event" ? eventRow(r) : ruleRow(r));
+  }
+  if (!nowPlaced) rows.push(`<div class="nowline">now ${s.clock}</div>`);
+  return `<div class="caption">Your day in the order you act: each rule with its window, the agent's one reminder 🔔 and the due time, plus what actually happened.</div>
+    <div class="legend"><span>~ estimated from plan</span><span>waiting = needs an event not observed yet</span>
+      <span>🔔 reminder · ⏳ last call</span><span>📡 sensor · 👤 you</span></div>
+    ${rows.join("")}`;
+}
+
+function eventRow(e) {
+  const icon = e.source === "you" ? "👤" : e.source === "history" ? "·" : "📡";
+  return `<div class="row event"><span class="when">${e.at}</span><span>${icon} ${esc(e.label)} · ${esc(e.source)}</span></div>`;
+}
+
+function ruleRow(r) {
+  const resolved = RESOLVED.has(r.status);
+  const chips = [];
+  if (r.kind === "regularity") chips.push(`<span class="chip">target ${r.when}</span>`);
+  if (r.reminder) {
+    const icon = r.reminder.kind === "last call" ? "⏳" : "🔔";
+    const st = r.reminder.state;
+    const cls = st === "sent" ? "sent" : st === "scheduled" ? "" : "off";
+    chips.push(`<span class="chip ${cls}">${icon} ${r.reminder.kind} ${r.reminder.at}${st === "scheduled" ? "" : " · " + st}</span>`);
+  }
+  if (r.due) chips.push(`<span class="chip">due ${r.due}</span>`);
+  if (r.hit_at) chips.push(`<span class="chip sent">done at ${r.hit_at}</span>`);
+  const status = r.status === "waiting" ? `waiting for ${r.waiting_for}` : r.status;
+  const when = r.kind === "regularity" ? (r.hit_at || r.when) : r.when;
+  return `<div class="row ${resolved ? "resolved" : ""}">
+    <span class="when">${when}</span>
+    <div><div class="title">${r.kind === "avoid" ? "🚫 " : ""}${esc(r.title)}</div>
+      <div class="sub">${esc(r.contract)}</div><div class="chips">${chips.join("")}</div></div>
+    <span class="status ${r.status}">${status}</span></div>`;
+}
+
+function contractPanel(c) {
+  const score = c.score === null ? "—" : c.score;
+  return `<div class="caption">A science-based contract: its score today and the status of each rule, with evidence strength.</div>
+    <div class="score-row"><span class="score">${score}<small>${c.score === null ? "" : "/100"}</small></span>
+      ${c.phase ? `<span class="phase">${esc(c.phase)}</span>` : ""}</div>
+    <div class="bar"><div style="width:${c.score ?? 0}%"></div></div>
+    <div class="goal">${esc(c.goal)}</div>
+    ${c.rules.map((r) => `<div class="rule"><span class="dot ${r.status}"></span>
+      <div>${esc(r.title)}<div class="detail">${r.status} · ${r.window}${r.detail ? " · " + esc(r.detail) : ""}</div></div>
+      <span class="tag" title="Evidence strength">${r.strength}</span></div>`).join("")}`;
+}
+
+function renderQuickActions(actions) {
+  $("quick").innerHTML = "";
+  actions.forEach((a) => {
+    const b = document.createElement("button");
+    b.textContent = `${ICONS[a.id] || "•"} ${a.label.split(" (")[0].split(",")[0]}`;
+    b.title = a.label;
+    b.onclick = () => api("log", { action: a.id });
+    $("quick").appendChild(b);
+  });
+  actionsRendered = true;
+}
+
+function setPlaying(on) { playing = on; $("play").textContent = on ? "❚❚ Pause" : "▶ Play"; acc = 0; }
+
+setInterval(async () => {
+  if (!playing || inflight) return;
+  acc += Number($("speed").value) * 0.2;
+  if (acc < 1) return;
+  const minutes = Math.floor(acc); acc -= minutes;
+  const { messages } = await api("advance", { minutes, stop_on_agent: $("pause").checked });
+  if ($("pause").checked && messages.some((m) => m.kind !== "sensor")) setPlaying(false);
+}, 200);
+
+$("play").onclick = () => setPlaying(!playing);
+$("next").onclick = () => { setPlaying(false); api("advance", { minutes: 1440, stop_on_agent: true }); };
+$("reset").onclick = async () => { setPlaying(false); $("chat").innerHTML = ""; await api("reset"); };
+$("sensors").onchange = (e) => api("sensors", { on: e.target.checked });
+$("form").onsubmit = (e) => {
+  e.preventDefault();
+  const text = $("text").value.trim();
+  if (text) { $("text").value = ""; api("say", { text }); }
+};
+
+api("reset");
+</script>
+</body>
+</html>

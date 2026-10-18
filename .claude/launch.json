@@ -1,0 +1,6 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {"name": "timeby", "runtimeExecutable": "python3", "runtimeArgs": ["-m", "timeby.server"], "port": 8765}
+  ]
+}

@@ -1,0 +1,95 @@
+{
+  "id": "cortisol_rhythm",
+  "name": "Cortisol rhythm",
+  "domain": "hormones",
+  "goal": "High cortisol after waking (strong cortisol awakening response), low cortisol before sleep.",
+  "sources": {
+    "fries2009": "Fries E, Dettenborn L, Kirschbaum C. The cortisol awakening response (CAR): facts and future directions. Int J Psychophysiol, 2009.",
+    "clow2010": "Clow A, Hucklebridge F, Stalder T, Evans P, Thorn L. The cortisol awakening response: more than a measure of HPA axis function. Neurosci Biobehav Rev, 2010.",
+    "leproult2001": "Leproult R, Colecchia EF, L'Hermite-Baleriaux M, Van Cauter E. Transition from dim to bright light in the morning induces an immediate elevation of cortisol levels. J Clin Endocrinol Metab, 2001.",
+    "thorn2004": "Thorn L, Hucklebridge F, Esgate A, Evans P, Clow A. The effect of dawn simulation on the cortisol response to awakening in healthy participants. Psychoneuroendocrinology, 2004.",
+    "hill2008": "Hill EE et al. Exercise and circulating cortisol levels: the intensity threshold effect. J Endocrinol Invest, 2008.",
+    "leproult1997": "Leproult R, Copinschi G, Buxton O, Van Cauter E. Sleep loss results in an elevation of cortisol levels the next evening. Sleep, 1997.",
+    "lovallo2005": "Lovallo WR et al. Caffeine stimulation of cortisol secretion across the waking hours in relation to caffeine intake levels. Psychosom Med, 2005.",
+    "drake2013": "Drake C, Roehrs T, Shambroom J, Roth T. Caffeine effects on sleep taken 0, 3, or 6 hours before going to bed. J Clin Sleep Med, 2013.",
+    "stutz2019": "Stutz J, Eiholzer R, Spengler CM. Effects of evening exercise on sleep in healthy participants: a systematic review and meta-analysis. Sports Med, 2019.",
+    "gooley2011": "Gooley JJ et al. Exposure to room light before bedtime suppresses melatonin onset and shortens melatonin duration in humans. J Clin Endocrinol Metab, 2011.",
+    "chang2015": "Chang AM, Aeschbach D, Duffy JF, Czeisler CA. Evening use of light-emitting eReaders negatively affects sleep, circadian timing, and next-morning alertness. PNAS, 2015.",
+    "pascoe2017": "Pascoe MC, Thompson DR, Jenkins ZM, Ski CF. Mindfulness mediates the physiological markers of stress: systematic review and meta-analysis. J Psychiatr Res, 2017."
+  },
+  "phases": [
+    {"id": "morning", "goal": "Maximize cortisol: support the awakening peak", "window": {"anchor": "wake", "start": 0, "end": 180}},
+    {"id": "evening", "goal": "Minimize cortisol: prepare for sleep", "window": {"anchor": "sleep", "start": -180, "end": 0}}
+  ],
+  "rules": [
+    {
+      "id": "consistent_wake", "title": "Wake at the same time", "label": "Wake up", "phase": "morning", "kind": "regularity",
+      "actions": ["wake"], "window": {"anchor": "wake", "start": -120, "end": 180},
+      "tolerance": 30, "lookback_days": 7, "weight": 2, "strength": "moderate",
+      "why": "The cortisol awakening response is triggered by the act of waking; a stable wake time keeps the daily cortisol curve anchored.",
+      "advice": "Get up at your planned wake time, weekends included.",
+      "sources": ["fries2009", "clow2010"]
+    },
+    {
+      "id": "morning_light", "title": "Bright light soon after waking", "label": "Get daylight", "duration": 15, "phase": "morning", "kind": "do",
+      "actions": ["sunlight", "bright_light"], "window": {"anchor": "wake", "start": 0, "end": 60},
+      "weight": 3, "strength": "moderate",
+      "why": "Moving from dim to bright light in the morning produces an immediate cortisol rise; dawn light enhances the awakening response.",
+      "advice": "Get 10+ minutes of outdoor daylight (or bright light) within an hour of waking.",
+      "sources": ["leproult2001", "thorn2004"],
+      "nudge": {"at": 10, "text": "Step outside or into bright light for 10+ minutes in the next hour — it boosts your morning cortisol peak."}
+    },
+    {
+      "id": "morning_movement", "title": "Move in the morning", "label": "Move", "duration": 30, "phase": "morning", "kind": "do",
+      "actions": ["exercise_light", "exercise_intense"], "window": {"anchor": "wake", "start": 0, "end": 180},
+      "weight": 1, "strength": "emerging",
+      "why": "Exercise acutely raises cortisol; placing it in the morning works with the natural peak instead of against the evening decline.",
+      "advice": "Fit in a walk or workout before mid-morning.",
+      "sources": ["hill2008"],
+      "nudge": {"at": 90, "text": "A short walk or workout in the next 90 minutes keeps your energy curve front-loaded."}
+    },
+    {
+      "id": "caffeine_cutoff", "title": "No caffeine within 6 h of bed", "label": "Caffeine cut-off", "reopens": "wake", "phase": "evening", "kind": "avoid",
+      "actions": ["caffeine"], "window": {"anchor": "sleep", "start": -360, "end": 0},
+      "weight": 3, "strength": "strong",
+      "why": "Caffeine raises cortisol and, even 6 hours before bed, measurably disrupts sleep.",
+      "advice": "Switch to decaf or herbal tea from now on.",
+      "sources": ["lovallo2005", "drake2013"],
+      "nudge": {"at": -390, "text": "Caffeine cut-off in 30 minutes. Last coffee now, if you want one."}
+    },
+    {
+      "id": "no_late_intense_exercise", "title": "No intense exercise in the last hour", "label": "No hard workouts", "phase": "evening", "kind": "avoid",
+      "actions": ["exercise_intense"], "window": {"anchor": "sleep", "start": -60, "end": 0},
+      "weight": 2, "strength": "moderate",
+      "why": "Evening exercise is fine in general, but vigorous exercise within ~1 hour of bedtime impairs sleep onset.",
+      "advice": "Keep it to light stretching this close to bed.",
+      "sources": ["stutz2019", "hill2008"]
+    },
+    {
+      "id": "dim_evening_light", "title": "Dim light and screens before bed", "label": "Dim lights & screens", "phase": "evening", "kind": "avoid",
+      "actions": ["bright_light", "screen_bright"], "window": {"anchor": "sleep", "start": -120, "end": 0},
+      "weight": 2, "strength": "strong",
+      "why": "Evening light suppresses melatonin and delays the circadian clock, shifting the whole hormonal rhythm later.",
+      "advice": "Dim the lights, use night mode, put the phone away.",
+      "sources": ["gooley2011", "chang2015"],
+      "nudge": {"at": -120, "text": "Two hours to bedtime: dim the lights and switch screens to night mode."}
+    },
+    {
+      "id": "wind_down", "title": "Wind-down routine", "label": "Wind down", "duration": 15, "phase": "evening", "kind": "do",
+      "actions": ["wind_down"], "window": {"anchor": "sleep", "start": -90, "end": 0},
+      "weight": 1, "strength": "emerging",
+      "why": "Relaxation and mindfulness practices lower cortisol.",
+      "advice": "15 minutes of reading, breathing or stretching in dim light.",
+      "sources": ["pascoe2017"],
+      "nudge": {"at": -60, "text": "Time to wind down: 15 minutes of reading or slow breathing, lights low."}
+    },
+    {
+      "id": "consistent_bedtime", "title": "Go to bed at the same time", "label": "Lights out", "phase": "evening", "kind": "regularity",
+      "actions": ["sleep"], "window": {"anchor": "sleep", "start": -120, "end": 180},
+      "tolerance": 30, "lookback_days": 7, "weight": 2, "strength": "moderate",
+      "why": "Short or shifted sleep raises cortisol the following evening, flattening the rhythm.",
+      "advice": "Lights out at your planned bedtime.",
+      "sources": ["leproult1997"]
+    }
+  ]
+}

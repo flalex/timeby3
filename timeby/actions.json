@@ -1,0 +1,13 @@
+{
+  "wake": "Woke up (out of bed)",
+  "sleep": "Lights out / went to bed",
+  "sunlight": "Outdoor daylight, 10+ min",
+  "bright_light": "Bright indoor light / light box",
+  "screen_bright": "Bright screen use (phone, laptop, TV)",
+  "caffeine": "Coffee, tea, energy drink",
+  "exercise_light": "Light movement (walk, stretching, yoga)",
+  "exercise_intense": "Intense exercise (HIIT, heavy lifting, hard cardio)",
+  "wind_down": "Wind-down routine (dim lights, reading, breathing)",
+  "meal": "Meal",
+  "snack": "Snack"
+}

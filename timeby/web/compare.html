@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>timeby v1 vs v2</title>
+<style>
+:root { --bg: #f4f3ef; --ink: #1d1d1b; --muted: #6f6e69; --line: #e4e2dc; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #141413; --ink: #ecebe6; --muted: #9b9a94; --line: #2f2f2c; } }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 13px -apple-system, BlinkMacSystemFont, sans-serif; }
+.grid { display: grid; grid-template-columns: 1fr 1fr; height: 100vh; }
+@media (max-width: 900px) { .grid { grid-template-columns: 1fr; grid-auto-rows: 100vh; } }
+.pane { display: flex; flex-direction: column; border-right: 1px solid var(--line); min-width: 0; }
+.pane h1 { font-size: 12px; font-weight: 600; margin: 0; padding: 6px 12px; color: var(--muted); border-bottom: 1px solid var(--line); }
+iframe { flex: 1; border: 0; width: 100%; }
+</style>
+</head>
+<body>
+<div class="grid">
+  <div class="pane"><h1>v1 — current (independent simulation)</h1><iframe src="/"></iframe></div>
+  <div class="pane"><h1>v2 — proposal (independent simulation)</h1><iframe src="/v2"></iframe></div>
+</div>
+</body>
+</html>

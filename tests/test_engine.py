@@ -385,3 +385,37 @@ def test_static_assets_are_flat_and_whitelisted():
     assert static_asset("/static/../server.py") is None
     assert static_asset("/static/v3.html") is None  # pages are served by route, not as static files
     assert static_asset("/static/missing.js") is None
+
+
+def story_sim():
+    from timeby.server import Simulation
+    s = Simulation(wait_for_observed=True, compact_routines=True, today=DAY)
+    s.reset(DAY, "story")
+    return s
+
+
+def test_story_scenario_oversleeps_into_one_recovery_plan_and_a_paired_now_card():
+    s = story_sim()
+    morning = s.jump("08:25")
+    assert [(m["at"], m["rule_id"]) for m in morning if m["kind"] == "nudge"] == [("07:00", "consistent_wake")]
+    assert [m["at"] for m in morning if m["kind"] == "recovery"] == ["08:25"]
+    s.jump("08:30")
+    hero = s.state()["today"]["now"]["hero"]
+    assert hero["rule_id"] == "morning_light" and hero["pair"]["rule_id"] == "regular_breakfast"
+
+
+def test_story_scenario_cafe_payment_flags_caffeine_and_an_edit_lifts_the_score():
+    from timeby.scenarios import CAFE_PAYMENT
+    s = story_sim()
+    [flag] = [m for m in s.jump("17:45") if m["kind"] == "feedback" and m["rule_id"] == "caffeine_cutoff"]
+    assert flag["status"] == "violated" and flag["at"] == "17:45"
+    assert s.state()["events"][-1]["source"] == CAFE_PAYMENT
+    s.jump("18:00")
+    score = lambda: next(c["score"] for c in s.state()["contracts"] if c["id"] == "cortisol_rhythm")
+    before = score()
+    s.edit({"contract_id": "cortisol_rhythm", "rule_id": "morning_movement", "happened": True, "at": "10:30",
+            "duration": "20", "comment": "Walked to the office"})
+    assert score() > before
+    closing = s.jump("23:10")
+    assert [m["at"] for m in closing if m["kind"] == "recap"] == ["23:10"]
+    assert s.state()["today"]["tomorrow"]["at"]

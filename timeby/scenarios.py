@@ -33,6 +33,7 @@ TYPICAL_WEEK = (  # (action, planned HH:MM, jitter minutes, probability it happe
     ("meal", "19:30", 60, 1.0), ("screen_bright", "22:00", 40, 0.9), ("sleep", "23:15", 50, 1.0),
 )
 WEARABLE = "wearable"
+CAFE_PAYMENT = "card payment · café"
 
 SCENARIOS = {s.id: s for s in (
     Scenario("model_day", "Model day", "Does everything on time and logs it.",
@@ -58,6 +59,11 @@ SCENARIOS = {s.id: s for s in (
              _s(("07:00", "wake", WEARABLE), ("07:45", "meal"), ("08:00", "caffeine"), ("11:00", "caffeine"),
                 ("12:30", "meal"), ("15:30", "snack"), ("16:00", "caffeine"), ("19:00", "meal"),
                 ("21:30", "snack"), ("23:00", "sleep", WEARABLE))),
+    Scenario("story", "Story mode (guided demo)", "Overslept, recovers, a late café coffee, one forgotten walk.",
+             _s(("08:25", "wake", WEARABLE), ("08:35", "water"), ("10:25", "dev_work"), ("12:30", "meal"),
+                ("12:31", "vegetables"), ("13:30", "marketing_work"), ("15:00", "water"),
+                ("17:45", "caffeine", CAFE_PAYMENT), ("19:00", "meal"), ("19:01", "vegetables"), ("22:00", "wind_down"),
+                ("23:10", "sleep", WEARABLE))),
     Scenario("own", "Your own (nothing scripted)", "Only you act: log, mark done, skip, edit. Use 'Jump to' to move the clock.",
              ()),
     Scenario("forgot_to_log", "Did it, logged nothing", "Only the wearable reports. Everything shows as missed — fix it by editing past items.",

@@ -590,6 +590,7 @@ function nowSection(now, later) {
 }
 
 const PAST_VISIBLE = 2;  // most recent past items stay unfolded
+let withBusy = (items, toRows) => items.flatMap(toRows);  // calendar.js replaces it to merge meetings in
 
 function timelineSection(t) {
   const current = [...(t.now.hero ? [t.now.hero] : []), ...t.now.also, ...t.now.avoid];
@@ -600,10 +601,10 @@ function timelineSection(t) {
   const folded = past.slice(0, keepOpen >= 0 ? Math.min(foldCount, keepOpen) : foldCount);
   const rows = [];
   if (folded.length) rows.push(foldRow(folded));
-  rows.push(...past.slice(folded.length).flatMap((i) => i.root && ls ? lateStartRows(i, ls, t.earlier) : [pastRow(i)]));
+  rows.push(...withBusy(past.slice(folded.length), (i) => i.root && ls ? lateStartRows(i, ls, t.earlier) : [pastRow(i)], "past"));
   rows.push(`<div class="nowline" title="Now"></div>`);
-  rows.push(...current.map((c) => currentRow(c, c === t.now.hero)));
-  rows.push(...t.later.map(futureRow));
+  rows.push(...withBusy(current, (c) => [currentRow(c, c === t.now.hero)], "now"));
+  rows.push(...withBusy(t.later, (i) => [futureRow(i)], "later"));
   if (t.tomorrow) rows.push(tomorrowRows(t.tomorrow));
   return `<div class="timeline">${rows.join("")}</div>`;
 }
@@ -840,5 +841,6 @@ if (LIVE) {
   restart();
 }
 </script>
+<script src="/static/calendar.js"></script>
 </body>
 </html>

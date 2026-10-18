@@ -3,10 +3,11 @@ from __future__ import annotations
 
 import json
 import threading
-from datetime import date, datetime, time, timedelta
+from datetime import date, datetime, time, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+from . import calendar_feed, calendar_ics
 from .assistant import Assistant
 from .demo import PROFILE, seed_history
 from .loader import load_actions, load_contracts
@@ -40,6 +41,8 @@ class Simulation:
         self.wait_for_observed = wait_for_observed
         self.compact_routines = compact_routines
         self.live = live  # real clock, no history, nothing scripted: the owner tests their own day
+        self.meetings: list[calendar_ics.CalEvent] = []  # today's busy times; survive replays of the day
+        self.calendar_connected = False  # feed fetched or meetings loaded
         self.reset(today)
 
     def reset(self, today: date | None = None, scenario: str = DEFAULT) -> None:
@@ -53,6 +56,7 @@ class Simulation:
         else:
             seed_history(self.assistant, today, pattern=TYPICAL_WEEK)
             self.now = datetime.combine(today, time(6, 30))
+        self._apply_meetings()
         self.sensors_on = True
         self.log_sources: dict[tuple[str, datetime], str] = {}
         self._msg_id = 0
@@ -114,6 +118,30 @@ class Simulation:
             self.log_sources[(next(r for r in self._contracts[cid].rules if r.id == rid).actions[0], at)] = "you (edited)"
         duration = int(body["duration"]) if str(body.get("duration") or "").isdigit() else None
         self.assistant.annotate(cid, rid, self.now, duration, body.get("comment", ""))
+
+    # --- calendar connector ---------------------------------------------------------------
+
+    def plan_feed(self) -> str:
+        """Today's plan + tomorrow's wake-up as an iCalendar feed."""
+        self.calendar_connected = True
+        ctx = self.assistant.ctx
+        return calendar_feed.feed(self.assistant.status(self.now), plan_wake(ctx, self.now), datetime.now(timezone.utc))
+
+    def load_meetings(self, body: dict) -> None:
+        """Busy times for today from pasted/uploaded .ics text, the bundled sample, or cleared."""
+        day = self.assistant.ctx.logical_day(self.now)
+        if body.get("clear"):
+            text = ""
+        elif body.get("sample"):
+            text = calendar_feed.sample_meetings(day, datetime.now(timezone.utc))
+        else:
+            text = body["ics"]
+        self.meetings = [m for m in calendar_ics.parse(text) if self.assistant.ctx.logical_day(m.start) == day]
+        self._apply_meetings()
+        self.calendar_connected = bool(self.meetings)
+
+    def _apply_meetings(self) -> None:
+        self.assistant.set_busy([(m.start, m.end) for m in self.meetings])
 
     def _at_today(self, hhmm: str) -> datetime:
         ctx = self.assistant.ctx
@@ -200,6 +228,7 @@ class Simulation:
             "scenarios": [{"id": sc.id, "label": sc.label, "description": sc.description} for sc in SCENARIOS.values()],
             "agents": self._agents(),
             "connectors": self._connectors(),
+            "busy": [self._busy_block(m) for m in sorted(self.meetings, key=lambda m: m.start)],
         }
 
     def _agents(self) -> list[dict]:
@@ -214,8 +243,16 @@ class Simulation:
         """Each connector with the goals it would automate (from the actions it reads)."""
         goals = [r for c in self.assistant.contracts for r in c.rules if r.kind is not RuleKind.AVOID]
         return [{"id": k.id, "name": k.name, "icon": k.icon, "providers": k.providers, "does": k.does,
-                 "status": k.status, "automates": [r.label for r in goals if set(r.actions) & set(k.reads)]}
+                 "status": self._connector_status(k), "automates": [r.label for r in goals if set(r.actions) & set(k.reads)]}
                 for k in CONNECTORS]
+
+    def _busy_block(self, m: calendar_ics.CalEvent) -> dict:
+        phase = "past" if m.end <= self.now else "now" if m.start <= self.now else "later"
+        return {"start": f"{m.start:%H:%M}", "end": f"{m.end:%H:%M}", "summary": m.summary,
+                "sort": m.start.isoformat(), "phase": phase}
+
+    def _connector_status(self, k) -> str:
+        return "connected" if k.id == "calendar" and self.calendar_connected else k.status
 
     # --- v2 read models ---------------------------------------------------------------------
 
@@ -324,6 +361,9 @@ def handle(sim: Simulation, op: str, body: dict) -> dict:
     elif op == "toggle":
         sim.assistant.set_enabled(body["contract_id"], bool(body["on"]), body.get("rule_id"))
         messages = []
+    elif op == "busy":
+        sim.load_meetings(body)
+        messages = []
     elif op == "sensors":
         sim.sensors_on = bool(body["on"])
         messages = []
@@ -334,6 +374,7 @@ def handle(sim: Simulation, op: str, body: dict) -> dict:
     return {"messages": synced + messages, "state": sim.state(), "live": sim.live}
 
 
+CALENDAR_FEEDS = {"/calendar.ics": "v3", "/calendar/live.ics": "live"}
 STATIC_TYPES = {".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8"}
 
 
@@ -346,12 +387,22 @@ def static_asset(path: str) -> Path | None:
     return asset if asset.is_file() else None
 
 
+def calendar_text(sim: Simulation) -> str:
+    with LOCK:
+        if sim.live:
+            sim.sync()
+        return sim.plan_feed()
+
+
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         path = self.path.split("?")[0]
         page = PAGES.get(path)
         if page:
             return self._send(200, (WEB / page).read_bytes(), "text/html; charset=utf-8")
+        feed = CALENDAR_FEEDS.get(path)
+        if feed:
+            return self._send(200, calendar_text(SIMS[feed]).encode(), "text/calendar; charset=utf-8")
         asset = static_asset(path)
         if asset:
             return self._send(200, asset.read_bytes(), STATIC_TYPES[asset.suffix])

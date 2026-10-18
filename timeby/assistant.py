@@ -48,6 +48,7 @@ class Assistant:
         self._mentioned: dict[tuple, datetime] = {}
         self.delivered: set[tuple] = set()  # (day, contract_id, rule_id) of reminders actually sent
         self._last_rule: tuple[str, str] | None = None  # what "why?" refers to
+        self.busy: list[tuple[datetime, datetime]] = []  # meetings: reminders wait until they end
 
     @staticmethod
     def _validate_anchors(profile: Profile, contracts: list[Contract], extra: set[str]) -> None:
@@ -117,11 +118,18 @@ class Assistant:
         candidates = [m for m in candidates if not self._held(day, m, now)]
         return self._send([m for m in candidates if self._claim(day, m, now)])
 
+    def set_busy(self, intervals: list[tuple[datetime, datetime]]) -> None:
+        self.busy = sorted(intervals)
+
+    def is_busy(self, now: datetime) -> bool:
+        return any(start <= now < end for start, end in self.busy)
+
     def _held(self, day: date, m: Message, now: datetime) -> bool:
-        """No reminders for goals the recovery plan dropped, and none but the wake-up call while still asleep."""
+        """No reminders for goals the recovery plan dropped, none during a meeting (held, not claimed, so they
+        go out once it ends if still valid), and none but the wake-up call while still asleep."""
         if m.kind not in ("nudge", "last_call"):
             return False
-        if (day, m.contract_id, m.rule_id) in self.skipped:
+        if (day, m.contract_id, m.rule_id) in self.skipped or self.is_busy(now):
             return True
         ctx = self.ctx
         asleep = ctx.observed(self.wake_anchor, day) is None and now >= ctx.planned_anchor(self.wake_anchor, day)

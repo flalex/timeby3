@@ -385,3 +385,82 @@ def test_static_assets_are_flat_and_whitelisted():
     assert static_asset("/static/../server.py") is None
     assert static_asset("/static/v3.html") is None  # pages are served by route, not as static files
     assert static_asset("/static/missing.js") is None
+
+
+# --- calendar connector ----------------------------------------------------------------------
+
+def test_ics_writer_escapes_folds_and_uses_crlf():
+    from timeby.calendar_ics import CalEvent, write
+    long = "Évidence; a, b\\c\n" + "é" * 80
+    text = write([CalEvent(at("12:00"), at("12:30"), "Lunch, early; ok", long, "u1@timeby")], at("10:00"))
+    assert text.startswith("BEGIN:VCALENDAR\r\n") and text.endswith("END:VCALENDAR\r\n")
+    lines = text.split("\r\n")[:-1]
+    assert all(len(line.encode()) <= 75 for line in lines)
+    assert "SUMMARY:Lunch\\, early\\; ok" in lines and "DTSTART:20261009T120000" in lines
+    assert "DTSTAMP:20261009T100000Z" in lines
+    assert any(line.startswith("DESCRIPTION:Évidence\\; a\\, b\\\\c\\n") for line in lines)
+    assert any(line.startswith(" é") for line in lines)  # continuation, never split inside a UTF-8 char
+
+
+def test_ics_parser_reads_utc_floating_and_tzid_and_skips_all_day():
+    from datetime import timezone
+    from timeby.calendar_ics import parse
+    text = ("BEGIN:VCALENDAR\nBEGIN:VEVENT\nDTSTART:20261009T120000\nDTEND:20261009T130000\nSUMMARY:Floating\n"
+            "END:VEVENT\nBEGIN:VEVENT\nDTSTART:20261009T100000Z\nDTEND:20261009T103000Z\nSUMMARY:Utc\nEND:VEVENT\n"
+            "BEGIN:VEVENT\nDTSTART;TZID=Europe/Lisbon:20261009T150000\nDTEND;TZID=Europe/Lisbon:20261009T153000\n"
+            "SUMMARY:Long \n name\\, folded\nEND:VEVENT\n"
+            "BEGIN:VEVENT\nDTSTART;VALUE=DATE:20261009\nDTEND;VALUE=DATE:20261010\nSUMMARY:Holiday\nEND:VEVENT\n"
+            "END:VCALENDAR\n")
+    floating, utc, tzid = parse(text)
+    assert (floating.start, floating.end, floating.summary) == (at("12:00"), at("13:00"), "Floating")
+    local = datetime(2026, 10, 9, 10, 0, tzinfo=timezone.utc).astimezone().replace(tzinfo=None)
+    assert utc.start == local and utc.end == local + timedelta(minutes=30)
+    assert (tzid.start, tzid.summary) == (at("15:00"), "Long name, folded")
+
+
+def test_ics_round_trip():
+    from timeby.calendar_ics import CalEvent, parse, write
+    event = CalEvent(at("09:00"), at("11:00"), "💻 Development", "Two hours; focus, no\nnotifications. " * 5, "dev@t")
+    assert parse(write([event], at("08:00"))) == [event]
+
+
+def test_calendar_feed_has_goals_limits_and_tomorrows_wake():
+    from timeby.calendar_ics import parse
+    from timeby.server import Simulation
+    s = Simulation(wait_for_observed=True, compact_routines=True, today=DAY)  # a Friday
+    events = {e.summary: e for e in parse(s.plan_feed())}
+    dev = events["💻 Development"]
+    assert (dev.start, dev.end) == (at("09:00"), at("11:00"))
+    assert "Two hours of development" in dev.description and "Mark G" in dev.description  # advice + evidence
+    assert (events["🍽️ Lunch"].start, events["🍽️ Lunch"].end) == (at("12:30"), at("13:00"))
+    cutoff = events["☕ Caffeine cut-off until 07:00"]
+    assert (cutoff.start, cutoff.end) == (at("17:00"), at("07:00", DAY + timedelta(days=1)))
+    assert events["⏰ Wake up"].start == at("07:00", DAY + timedelta(days=1))
+    assert "🏋️ Workout" in events and "🏄 Surfing" not in events  # weekday goals only on their days
+    assert "Veg with lunch" not in " ".join(events)  # no duration: not a calendar block
+
+
+def test_meeting_holds_lunch_nudge_until_it_ends():
+    a = new_assistant()
+    a.set_busy([(at("12:00"), at("13:00"))])
+    held = [m for minute in range(60) for m in a.tick(at("12:00") + timedelta(minutes=minute))]
+    assert ("nudge", "regular_lunch") not in kinds(held)
+    assert ("nudge", "regular_lunch") in kinds(a.tick(at("13:00")))
+
+
+def test_reminder_whose_validity_ends_during_a_meeting_is_not_sent_late():
+    a = new_assistant()
+    a.log("wake", at("07:00"))
+    a.set_busy([(at("07:05"), at("08:30"))])  # daylight nudge 07:10, valid until 08:00
+    sent = [m for minute in range(120) for m in a.tick(at("07:05") + timedelta(minutes=minute))]
+    assert "morning_light" not in {m.rule_id for m in sent}
+
+
+def test_busy_op_loads_sample_meetings_and_marks_calendar_connected():
+    from timeby.server import Simulation, handle
+    s = Simulation(wait_for_observed=True, compact_routines=True, today=DAY)
+    state = handle(s, "busy", {"sample": True})["state"]
+    assert (state["busy"][0]["start"], state["busy"][0]["end"]) == ("12:00", "13:00")
+    assert next(c for c in state["connectors"] if c["id"] == "calendar")["status"] == "connected"
+    s.jump("05:00")  # replaying the day keeps the meetings
+    assert s.assistant.busy and handle(s, "busy", {"clear": True})["state"]["busy"] == []

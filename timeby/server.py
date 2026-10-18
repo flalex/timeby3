@@ -334,11 +334,27 @@ def handle(sim: Simulation, op: str, body: dict) -> dict:
     return {"messages": synced + messages, "state": sim.state(), "live": sim.live}
 
 
+STATIC_TYPES = {".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8"}
+
+
+def static_asset(path: str) -> Path | None:
+    """/static/<name>.js|.css served from timeby/web — flat names only, no directory traversal."""
+    name = path.removeprefix("/static/")
+    if name == path or "/" in name or Path(name).suffix not in STATIC_TYPES:
+        return None
+    asset = WEB / name
+    return asset if asset.is_file() else None
+
+
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
-        page = PAGES.get(self.path.split("?")[0])
+        path = self.path.split("?")[0]
+        page = PAGES.get(path)
         if page:
             return self._send(200, (WEB / page).read_bytes(), "text/html; charset=utf-8")
+        asset = static_asset(path)
+        if asset:
+            return self._send(200, asset.read_bytes(), STATIC_TYPES[asset.suffix])
         self._send(404, b"not found", "text/plain")
 
     def do_POST(self):

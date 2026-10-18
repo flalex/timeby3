@@ -378,3 +378,10 @@ def test_late_credit_is_partial():
     a.log("meal", at("13:10"))  # 40 min late today
     lunch = result_of(a, "regular_lunch", at("15:00"))
     assert lunch.status is Status.LATE and lunch.earned == pytest.approx(2 * (1 + 0.5) / 2)
+
+
+def test_static_assets_are_flat_and_whitelisted():
+    from timeby.server import static_asset
+    assert static_asset("/static/../server.py") is None
+    assert static_asset("/static/v3.html") is None  # pages are served by route, not as static files
+    assert static_asset("/static/missing.js") is None

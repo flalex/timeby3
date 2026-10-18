@@ -12,6 +12,7 @@ from .demo import PROFILE, seed_history
 from .loader import load_actions, load_contracts
 from .model import ContractReport, Message, RuleKind, RuleResult, Status
 from .connectors import CONNECTORS
+from .personal import DAY_ORDER, parse_times
 from .scenarios import DEFAULT, SCENARIOS, TYPICAL_WEEK, YOU
 from .sleep_plan import plan_wake
 from .today import build_today
@@ -40,14 +41,17 @@ class Simulation:
         self.wait_for_observed = wait_for_observed
         self.compact_routines = compact_routines
         self.live = live  # real clock, no history, nothing scripted: the owner tests their own day
+        self.profile = PROFILE  # the owner's setup survives resets and replays
+        self.day_overrides: dict[tuple[str, str], tuple[str, ...]] = {}
         self.reset(today)
 
     def reset(self, today: date | None = None, scenario: str = DEFAULT) -> None:
         today = today or date.today()
         self.scenario = SCENARIOS["own" if self.live else scenario]
         self.outbox = Outbox()
-        self.assistant = Assistant(PROFILE, load_contracts(), load_actions(), self.outbox,
+        self.assistant = Assistant(self.profile, load_contracts(), load_actions(), self.outbox,
                                    wait_for_observed=self.wait_for_observed, compact_routines=self.compact_routines)
+        self.assistant.day_overrides = dict(self.day_overrides)
         if self.live:
             self.now = datetime.now().replace(second=0, microsecond=0)
         else:
@@ -114,6 +118,14 @@ class Simulation:
             self.log_sources[(next(r for r in self._contracts[cid].rules if r.id == rid).actions[0], at)] = "you (edited)"
         duration = int(body["duration"]) if str(body.get("duration") or "").isdigit() else None
         self.assistant.annotate(cid, rid, self.now, duration, body.get("comment", ""))
+
+    def set_profile(self, anchors: dict[str, str]) -> None:
+        self.assistant.set_profile(parse_times(anchors))
+        self.profile = self.assistant.profile
+
+    def set_days(self, contract_id: str, rule_id: str, days: list[str]) -> None:
+        self.assistant.set_days(contract_id, rule_id, days)
+        self.day_overrides = dict(self.assistant.day_overrides)
 
     def _at_today(self, hhmm: str) -> datetime:
         ctx = self.assistant.ctx
@@ -199,16 +211,22 @@ class Simulation:
             "scenario": self.scenario.id,
             "scenarios": [{"id": sc.id, "label": sc.label, "description": sc.description} for sc in SCENARIOS.values()],
             "agents": self._agents(),
+            "profile": self._profile(),
             "connectors": self._connectors(),
         }
 
     def _agents(self) -> list[dict]:
         a = self.assistant
         return [{"id": c.id, "name": c.name, "domain": c.domain, "goal": c.goal, "enabled": a.is_enabled(c.id),
-                 "goals": [{"id": r.id, "label": r.label, "kind": r.kind.value, "action": r.actions[0], "days": list(r.days),
-                            "topic": r.topic,
+                 "goals": [{"id": r.id, "label": r.label, "kind": r.kind.value, "action": r.actions[0],
+                            "days": list(a.customized(c.id, r).days), "weekly": bool(r.days), "topic": r.topic,
                             "enabled": (c.id, r.id) not in a.disabled_rules} for r in c.rules]}
                 for c in a.contracts]
+
+    def _profile(self) -> dict:
+        anchors = self.assistant.profile.anchors
+        return {"anchors": {name: f"{anchors[name].time:%H:%M}" for name in DAY_ORDER},
+                "warnings": list(self.assistant.profile_warnings())}
 
     def _connectors(self) -> list[dict]:
         """Each connector with the goals it would automate (from the actions it reads)."""
@@ -323,6 +341,12 @@ def handle(sim: Simulation, op: str, body: dict) -> dict:
         messages = []
     elif op == "toggle":
         sim.assistant.set_enabled(body["contract_id"], bool(body["on"]), body.get("rule_id"))
+        messages = []
+    elif op == "profile":
+        sim.set_profile(body.get("anchors") or {})
+        messages = []
+    elif op == "days":
+        sim.set_days(body["contract_id"], body["rule_id"], list(body.get("days") or []))
         messages = []
     elif op == "sensors":
         sim.sensors_on = bool(body["on"])

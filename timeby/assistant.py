@@ -5,9 +5,9 @@ from dataclasses import replace
 from datetime import date, datetime, timedelta
 from typing import Protocol
 
-from . import engine, intents, narration
+from . import engine, intents, narration, personal
 from .recovery import RecoveryPlan, build_recovery
-from .model import Contract, ContractReport, Event, Message, Profile, Recommendation, RuleKind, RuleResult
+from .model import Contract, ContractReport, Event, Message, Profile, Recommendation, Rule, RuleKind, RuleResult
 
 ROUTINE_WINDOW = timedelta(hours=3)  # brief/recap only fire this soon after their anchor
 RECAP_GRACE = timedelta(hours=1)     # without an observed bedtime, recap this long after the planned one
@@ -33,6 +33,7 @@ class Assistant:
         self.contracts = contracts  # all agents; switched-off ones are filtered out by `active`
         self.disabled_contracts: set[str] = set()
         self.disabled_rules: set[tuple[str, str]] = set()
+        self.day_overrides: dict[tuple[str, str], tuple[str, ...]] = {}  # owner's weekdays per goal
         self.notes: dict[tuple[date, str, str], dict] = {}  # owner's duration/comment per goal per day
         self.late_starts: dict[date, RecoveryPlan] = {}       # recovery plan of a day that started late
         self.skipped: set[tuple[date, str, str]] = set()      # goals the recovery plan dropped (no reminders)
@@ -244,18 +245,46 @@ class Assistant:
             return False
         return rule_id is None or (contract_id, rule_id) not in self.disabled_rules
 
+    # --- personal setup: the owner's own day and goal weekdays ------------------------------
+
+    def set_profile(self, times: dict) -> tuple[str, ...]:
+        """Move the day's anchors (wake, meals, lights out). Invalid times raise; returns warnings."""
+        check = personal.check_day(times, self.profile.day_start)
+        if check.errors:
+            raise ValueError(" ".join(check.errors))
+        self.profile = personal.with_times(self.profile, times)
+        return check.warnings
+
+    def profile_warnings(self) -> tuple[str, ...]:
+        times = {name: self.profile.anchors[name].time for name in personal.DAY_ORDER}
+        return personal.check_day(times, self.profile.day_start).warnings
+
+    def set_days(self, contract_id: str, rule_id: str, days: list[str]) -> None:
+        if not any(c.id == contract_id and r.id == rule_id for c in self.contracts for r in c.rules):
+            raise ValueError(f"unknown goal '{contract_id}.{rule_id}'")
+        unknown = set(days) - set(engine.WEEKDAYS)
+        if unknown:
+            raise ValueError(f"unknown weekdays: {sorted(unknown)}")
+        if not days:
+            raise ValueError("Pick at least one day, or switch the goal off.")
+        self.day_overrides[(contract_id, rule_id)] = tuple(d for d in engine.WEEKDAYS if d in days)
+
+    def customized(self, contract_id: str, rule: Rule) -> Rule:
+        days = self.day_overrides.get((contract_id, rule.id))
+        return replace(rule, days=days) if days else rule
+
     @property
     def active(self) -> list[Contract]:
-        """Enabled agents with only their enabled goals — everything downstream sees just these."""
+        """Enabled agents with only their enabled goals, as the owner set them up — everything downstream sees just these."""
         active = []
         for c in self.contracts:
-            rules = tuple(r for r in c.rules if self.is_enabled(c.id, r.id))
+            rules = tuple(self.customized(c.id, r) for r in c.rules if self.is_enabled(c.id, r.id))
             if rules:
                 active.append(replace(c, rules=rules))
         return active
 
     def _contract_of(self, rule) -> Contract:
-        return next(c for c in self.contracts if rule in c.rules)
+        return next(c for c in self.contracts if any(r.id == rule.id for r in c.rules))  # by id: active rules are copies
 
     def _lookup(self, key: tuple[str, str], now: datetime) -> tuple[RuleResult, dict[str, str]]:
         contract_id, rule_id = key

@@ -419,3 +419,76 @@ def test_story_scenario_cafe_payment_flags_caffeine_and_an_edit_lifts_the_score(
     closing = s.jump("23:10")
     assert [m["at"] for m in closing if m["kind"] == "recap"] == ["23:10"]
     assert s.state()["today"]["tomorrow"]["at"]
+# --- personal setup ---------------------------------------------------------------------------
+
+def day_times(**changes):
+    times = {"wake": "07:00", "breakfast": "07:45", "lunch": "12:30", "dinner": "19:00", "sleep": "23:00", **changes}
+    return {name: time.fromisoformat(t) for name, t in times.items()}
+
+
+def test_check_day_accepts_a_normal_day_and_a_night_owl():
+    from timeby.personal import check_day
+    assert check_day(day_times(), PROFILE.day_start).errors == ()
+    owl = check_day(day_times(wake="09:00", breakfast="09:30", lunch="13:30", dinner="20:00", sleep="00:30"),
+                    PROFILE.day_start)
+    assert owl.errors == () and owl.warnings == ()  # lights out after midnight still belongs to the day
+
+
+@pytest.mark.parametrize("changes, error", [
+    ({"breakfast": "06:30"}, "Breakfast must come after wake-up."),
+    ({"breakfast": "07:15", "lunch": "09:15", "dinner": "11:15", "sleep": "12:00"}, "at least 6 h between"),
+    ({"lunch": "09:00"}, "Lunch must be at least 2 h after breakfast."),
+    ({"dinner": "14:00"}, "Dinner must be at least 2 h after lunch."),
+])
+def test_check_day_rejects_bad_days(changes, error):
+    from timeby.personal import check_day
+    assert any(error in e for e in check_day(day_times(**changes), PROFILE.day_start).errors)
+
+
+def test_check_day_warns_below_seven_hours_of_sleep_but_allows_it():
+    from timeby.personal import check_day
+    check = check_day(day_times(wake="05:30", breakfast="06:00", sleep="23:30"), PROFILE.day_start)
+    assert check.errors == () and "6 h of sleep" in check.warnings[0] and "AASM" in check.warnings[0]
+
+
+def test_set_profile_moves_dependent_goals_and_reminders():
+    a = Assistant(PROFILE, list(CONTRACTS.values()), ACTIONS, Inbox())
+    a.set_profile(day_times(wake="06:00", breakfast="06:45", lunch="13:30"))
+    assert result_of(a, "morning_light", at("05:00")).reminder.at == at("06:10")
+    assert result_of(a, "regular_lunch", at("05:00")).reminder.at == at("13:15")
+    assert a.profile.anchors["wake"].observed_by == "wake" and a.profile.day_start == PROFILE.day_start
+
+
+def test_set_profile_rejects_invalid_times_and_keeps_the_old_plan():
+    a = Assistant(PROFILE, list(CONTRACTS.values()), ACTIONS, Inbox())
+    with pytest.raises(ValueError, match="Lunch must be at least 2 h after breakfast"):
+        a.set_profile(day_times(lunch="08:30"))
+    assert a.profile == PROFILE
+
+
+def test_set_days_moves_padel_to_another_weekday():
+    a = Assistant(PROFILE, list(CONTRACTS.values()), ACTIONS, Inbox())
+    planned = lambda: {rule.id for _, _, rule in a.plan(DAY)}  # DAY is a Friday; padel is tue/thu
+    assert "padel" not in planned()
+    a.set_days("fitness", "padel", ["fri", "mon"])
+    assert "padel" in planned() and a.day_overrides[("fitness", "padel")] == ("mon", "fri")
+    with pytest.raises(ValueError, match="at least one day"):
+        a.set_days("fitness", "padel", [])
+
+
+def test_server_profile_and_days_ops():
+    from timeby.server import Simulation, handle
+    sim = Simulation(wait_for_observed=True, compact_routines=True, today=DAY)
+    short_night = {"wake": "06:00", "breakfast": "06:30", "lunch": "12:00", "dinner": "18:30", "sleep": "23:30"}
+    state = handle(sim, "profile", {"anchors": short_night})["state"]
+    assert state["profile"]["anchors"]["wake"] == "06:00" and "AASM" in state["profile"]["warnings"][0]
+    with pytest.raises(ValueError, match="Dinner must come after lunch"):
+        handle(sim, "profile", {"anchors": {**short_night, "dinner": "11:00"}})
+    with pytest.raises(ValueError, match="HH:MM"):
+        handle(sim, "profile", {"anchors": {**short_night, "wake": "6am"}})
+    state = handle(sim, "days", {"contract_id": "fitness", "rule_id": "padel", "days": ["fri"]})["state"]
+    padel = next(g for a in state["agents"] if a["id"] == "fitness" for g in a["goals"] if g["id"] == "padel")
+    assert padel["days"] == ["fri"] and padel["weekly"]
+    state = handle(sim, "jump", {"at": "06:00"})["state"]  # replaying the day keeps the owner's setup
+    padel = next(g for a in state["agents"] if a["id"] == "fitness" for g in a["goals"] if g["id"] == "padel")
+    assert state["profile"]["anchors"]["wake"] == "06:00" and padel["days"] == ["fri"]

@@ -41,8 +41,19 @@ class Context:
     def observed_anchor(self, name: str, day: date) -> datetime:
         return self.observed(name, day) or self.planned_anchor(name, day)
 
-    def matching(self, actions: tuple[str, ...], start: datetime, end: datetime, now: datetime) -> list[Event]:
-        return [e for e in self.events if e.action in actions and start <= e.at < end and e.at <= now]
+    def matching(self, rule: Rule, start: datetime, end: datetime, now: datetime, day: date) -> list[Event]:
+        """This rule's events: ones the owner tied to it (that day), else by action inside the window.
+        An event tied to another goal still counts for limits (avoid), never for another task."""
+        hits = []
+        for e in self.events:
+            if e.action not in rule.actions or e.at > now:
+                continue
+            if e.goal == rule.id:
+                if self.logical_day(e.at) == day:
+                    hits.append(e)
+            elif (e.goal is None or rule.kind is RuleKind.AVOID) and start <= e.at < end:
+                hits.append(e)
+        return hits
 
 
 def bounds(window: Window, anchor_at: datetime) -> tuple[datetime, datetime]:
@@ -108,12 +119,14 @@ def _judge_window(rule: Rule, ctx: Context, now: datetime) -> RuleResult:
     day = ctx.logical_day(now)
     start, end = rule_bounds(rule, ctx, day)
     end = _open_until_observed(rule, ctx, day, end, now)
-    hits = ctx.matching(rule.actions, start, end, now)
+    hits = ctx.matching(rule, start, end, now, day)
+    on_time = [h for h in hits if start <= h.at < end]
     hit, over = bool(hits), now >= end
     if _waits_for_anchor(rule, ctx, day) and not hit and not over:
         status = Status.WAITING
-    elif rule.kind is RuleKind.DO:
-        status = Status.DONE if hit else Status.MISSED if over else Status.PENDING
+    elif rule.kind is RuleKind.DO:  # a goal-tied event outside the window happened, but late
+        status = Status.DONE if on_time else Status.MISSED if hit or over else Status.PENDING
+        hits = on_time or hits
     else:
         status = Status.VIOLATED if hit else Status.CLEAN if over else Status.PENDING
     return _result(rule, ctx, day, status, _earned(rule, status), hit_at=hits[0].at if hits else None, end=end)
@@ -123,7 +136,7 @@ def _closest_hit(rule: Rule, ctx: Context, day: date, now: datetime) -> tuple[bo
     """(judgeable, when the action happened). None = skipped once the window closed."""
     target = ctx.planned_anchor(rule.window.anchor, day)
     start, end = bounds(rule.window, target)
-    hits = ctx.matching(rule.actions, start, end, now)
+    hits = ctx.matching(rule, start, end, now, day)
     if hits:
         return True, min(hits, key=lambda e: abs(e.at - target)).at
     return now >= end, None
@@ -161,8 +174,16 @@ def _regularity_detail(rule: Rule, judged: int, on_time: int, devs: list[int]) -
     return detail
 
 
+def applies(rule: Rule, day: date) -> bool:
+    return not rule.days or WEEKDAYS[day.weekday()] in rule.days
+
+
+WEEKDAYS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
+
+
 def evaluate(contract: Contract, ctx: Context, now: datetime) -> ContractReport:
-    results = tuple(evaluate_rule(r, ctx, now) for r in contract.rules)
+    day = ctx.logical_day(now)
+    results = tuple(evaluate_rule(r, ctx, now) for r in contract.rules if applies(r, day))
     judged = [r for r in results if r.earned is not None]
     total = sum(r.rule.weight for r in judged)
     score = round(100 * sum(r.earned for r in judged) / total) if total else None
@@ -222,7 +243,7 @@ def day_plan(contracts: list[Contract], ctx: Context, day: date) -> list[tuple[d
     """Every scheduled reminder for a day, ready to be pushed to a calendar."""
     plan = []
     for contract in contracts:
-        for rule in contract.rules:
+        for rule in (r for r in contract.rules if applies(r, day)):
             rem = reminder(rule, rule_anchor(rule, ctx, day))  # same anchor the live reminder uses
             if rem:
                 plan.append((rem.at, contract, rule))

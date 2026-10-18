@@ -1,0 +1,43 @@
+{
+  "id": "fitness",
+  "name": "Fitness",
+  "domain": "fitness",
+  "goal": "Hit the weekly activity guideline through planned sessions: surfing, padel and workouts.",
+  "sources": {
+    "who2020": "Bull FC et al. World Health Organization 2020 guidelines on physical activity and sedentary behaviour. Br J Sports Med, 2020.",
+    "oja2017": "Oja P et al. Associations of specific types of sports and exercise with all-cause and cardiovascular-disease mortality: a cohort study of 80 306 British adults. Br J Sports Med, 2017.",
+    "lally2010": "Lally P, van Jaarsveld CHM, Potts HWW, Wardle J. How are habits formed: modelling habit formation in the real world. Eur J Soc Psychol, 2010."
+  },
+  "phases": [
+    {"id": "day", "goal": "Planned sessions on their days", "window": {"anchor": "wake", "start": 0, "end": 1080}}
+  ],
+  "rules": [
+    {
+      "id": "surfing", "title": "Weekend surf session", "label": "Surfing", "duration": 90, "days": ["sat", "sun"],
+      "phase": "day", "kind": "do", "actions": ["surf"], "window": {"anchor": "wake", "start": 60, "end": 300},
+      "weight": 2, "strength": "moderate",
+      "why": "Vigorous sessions count double toward the WHO weekly target (75–150 min vigorous); a fixed weekend slot makes it a habit.",
+      "advice": "Get in the water before midday.",
+      "sources": ["who2020", "lally2010"],
+      "nudge": {"at": 45, "text": "Surf window opens in 15 minutes — wax the board."}
+    },
+    {
+      "id": "padel", "title": "Padel game", "label": "Padel", "duration": 90, "days": ["tue", "thu"],
+      "phase": "day", "kind": "do", "actions": ["padel"], "window": {"anchor": "dinner", "start": -180, "end": -60},
+      "weight": 2, "strength": "moderate",
+      "why": "Racket sports showed the strongest association with lower all-cause and cardiovascular mortality among common sports.",
+      "advice": "Play before dinner so you finish well ahead of bedtime.",
+      "sources": ["oja2017", "who2020"],
+      "nudge": {"at": -195, "text": "Padel in 15 minutes — grab your racket."}
+    },
+    {
+      "id": "workout", "title": "Strength workout", "label": "Workout", "duration": 60, "days": ["mon", "wed", "fri"],
+      "phase": "day", "kind": "do", "actions": ["exercise_intense"], "window": {"anchor": "dinner", "start": -180, "end": -60},
+      "weight": 2, "strength": "strong",
+      "why": "WHO recommends muscle-strengthening activity on 2+ days a week in addition to aerobic activity.",
+      "advice": "Train before dinner — late, hard sessions disturb sleep.",
+      "sources": ["who2020", "lally2010"],
+      "nudge": {"at": -195, "text": "Workout window opens in 15 minutes."}
+    }
+  ]
+}

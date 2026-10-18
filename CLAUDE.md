@@ -35,6 +35,9 @@ scoring of situation/state) must be deterministic and grounded — never random,
   waits for real lights-out. `Assistant.correct()` rewrites today's events for a goal (owner edits past items);
   `Assistant.annotate()` stores duration/comment. `sleep_plan.plan_wake()` = tomorrow's wake-up (usual time unless
   sleep < 7 h, then shift ≤ 60 min). `scenarios.py` = user scenarios: what the owner does/skips/adds today (wearable reports wake/sleep), same typical history.
+- Events the owner ties to a goal (`Event.goal` = rule id, set by `correct()`) count for that goal on that day even
+  outside its window (late breakfast stays breakfast, shown "Late") and never for another task; limits still see them.
+  Rule ids are unique across contracts. Rules may have `days` (mon..sun) — applies only on those weekdays.
 - Agents = contracts, goals = rules. `Assistant.set_enabled(contract_id, on, rule_id=None)` switches either off;
   `Assistant.active` (enabled agents with enabled goals only) is what status/tick/plan see, so off = fully silent.
 - `timeby/server.py` + `timeby/web/index.html` — interactive simulator: simulated clock, simulated sensors

@@ -191,7 +191,8 @@ class Simulation:
             "actions": [{"id": k, "label": v} for k, v in self.assistant.actions.items()],
             "timeline": self._timeline(reports, day),
             "now_card": self._now_card(reports, now),
-            "today": build_today(reports, now, self.assistant.notes_for(day), plan_wake(ctx, now)),
+            "today": build_today(reports, now, self.assistant.notes_for(day), plan_wake(ctx, now),
+                                 datetime.combine(day, self.assistant.profile.day_start)),
             "scenario": self.scenario.id,
             "scenarios": [{"id": sc.id, "label": sc.label, "description": sc.description} for sc in SCENARIOS.values()],
             "agents": self._agents(),
@@ -200,7 +201,7 @@ class Simulation:
     def _agents(self) -> list[dict]:
         a = self.assistant
         return [{"id": c.id, "name": c.name, "domain": c.domain, "goal": c.goal, "enabled": a.is_enabled(c.id),
-                 "goals": [{"id": r.id, "label": r.label, "kind": r.kind.value, "action": r.actions[0],
+                 "goals": [{"id": r.id, "label": r.label, "kind": r.kind.value, "action": r.actions[0], "days": list(r.days),
                             "enabled": (c.id, r.id) not in a.disabled_rules} for r in c.rules]}
                 for c in a.contracts]
 

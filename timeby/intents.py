@@ -14,6 +14,10 @@ ACTION_KEYWORDS = {
     "wind_down": ["wind down", "reading", "read", "meditate", "meditation", "meditating", "breathing", "journal"],
     "meal": ["breakfast", "lunch", "dinner", "meal", "ate", "eating", "food"],
     "snack": ["snack", "chocolate", "cookie", "chips", "fruit"],
+    "surf": ["surf", "surfing", "surfed"],
+    "padel": ["padel"],
+    "dev_work": ["coding", "coded", "development", "deep work", "programming"],
+    "marketing_work": ["marketing", "campaign", "newsletter"],
     "wake": ["woke", "wake", "awake", "got up", "good morning"],
     "sleep": ["bed", "sleep", "lights out", "good night", "goodnight"],
 }

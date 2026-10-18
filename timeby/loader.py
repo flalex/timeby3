@@ -18,9 +18,17 @@ def load_actions(path: Path = ACTIONS_FILE) -> dict[str, str]:
     return json.loads(path.read_text())
 
 
+WEEKDAYS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
+
+
 def load_contracts(directory: Path = CONTRACTS_DIR, actions: dict[str, str] | None = None) -> list[Contract]:
     actions = actions if actions is not None else load_actions()
-    return [parse_contract(json.loads(p.read_text()), actions) for p in sorted(directory.glob("*.json"))]
+    contracts = [parse_contract(json.loads(p.read_text()), actions) for p in sorted(directory.glob("*.json"))]
+    rule_ids = [r.id for c in contracts for r in c.rules]
+    duplicates = {i for i in rule_ids if rule_ids.count(i) > 1}
+    if duplicates:  # events can be tied to a goal by rule id, so ids must be unique across contracts
+        raise ContractError(f"rule ids must be unique across contracts: {sorted(duplicates)}")
+    return contracts
 
 
 def parse_contract(raw: dict, actions: dict[str, str]) -> Contract:
@@ -61,6 +69,7 @@ def _rule(raw: dict) -> Rule:
         label=raw.get("label", raw["title"]),
         duration=raw.get("duration"),
         reopens=raw.get("reopens"),
+        days=tuple(raw.get("days", ())),
     )
 
 
@@ -79,6 +88,7 @@ def _validate(contract: Contract, actions: dict[str, str]) -> None:
             errors.append(f"{where}: window start must be before end")
         if rule.kind is RuleKind.REGULARITY and rule.tolerance <= 0:
             errors.append(f"{where}: regularity rule needs a positive tolerance")
+        errors += [f"{where}: unknown weekday '{d}'" for d in rule.days if d not in WEEKDAYS]
         if rule.strength not in {"strong", "moderate", "emerging"}:
             errors.append(f"{where}: strength must be strong|moderate|emerging")
     if errors:

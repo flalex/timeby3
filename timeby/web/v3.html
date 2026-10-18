@@ -59,10 +59,18 @@ body.live .demo-only { display: none !important; }
 .agents h3 { margin: 0; font-size: 12px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); }
 .agents .hint { font-size: 12px; color: var(--muted); margin: 4px 0 8px; }
 .agent { border-top: 1px solid var(--line); padding: 10px 0 4px; }
-.agent-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.agent-head { display: flex; align-items: center; gap: 6px; }
 .agent-head b { font-size: 14px; }
 .agent-head .dom { font-size: 12px; color: var(--muted); }
-.goals { list-style: none; margin: 6px 0 0; padding: 0; transition: opacity .2s; }
+.goals { list-style: none; margin: 6px 0 0; padding: 0 0 0 20px; transition: opacity .2s; }
+.goals[hidden] { display: none; }
+.fold-agent { border: 0; background: none; padding: 0; display: flex; gap: 6px; align-items: flex-start; text-align: left; flex: 1; min-width: 0; }
+.fold-agent .dom { display: block; }
+.chev { display: inline-block; width: 14px; color: var(--muted); font-size: 16px; line-height: 18px; transition: transform .2s; }
+.agent.open .chev { transform: rotate(90deg); }
+.gear { border: 0; background: none; color: var(--muted); font-size: 16px; padding: 2px 4px; border-radius: 6px; }
+.gear:hover { color: var(--ink); background: var(--surface-2); }
+.goals .days { font-style: normal; font-size: 11px; color: var(--faint); margin-left: 4px; }
 .goals li { display: flex; justify-content: space-between; align-items: center; font-size: 13px; padding: 4px 0 4px 2px; }
 .goals li.off span:first-child { color: var(--faint); text-decoration: line-through; }
 .agent.off .goals { opacity: .45; }
@@ -344,18 +352,23 @@ async function post(op, body) {
   return data;
 }
 const ICONS = { wake: "⏰", sunlight: "☀️", bright_light: "💡", screen_bright: "📱", caffeine: "☕",
-  exercise_light: "🚶", exercise_intense: "🏋️", wind_down: "🧘", meal: "🍽️", snack: "🍪", sleep: "🌙" };
+  exercise_light: "🚶", exercise_intense: "🏋️", wind_down: "🧘", meal: "🍽️", snack: "🍪", sleep: "🌙",
+  surf: "🏄", padel: "🎾", dev_work: "💻", marketing_work: "📣" };
 const SHORT = { caffeine: "Coffee", meal: "Meal", snack: "Snack", sunlight: "Daylight", exercise_light: "Walk",
-  exercise_intense: "Workout", screen_bright: "Screens", wind_down: "Wind down" };
+  exercise_intense: "Workout", surf: "Surf", padel: "Padel", dev_work: "Development", marketing_work: "Marketing",
+  screen_bright: "Screens", wind_down: "Wind down" };
+const DAY_SHORT = { mon: "Mon", tue: "Tue", wed: "Wed", thu: "Thu", fri: "Fri", sat: "Sat", sun: "Sun" };
 const DONE_LABEL = { wake: "I'm up", sleep: "Going to bed", meal: "Eating now" };
 const PROACTIVE = new Set(["nudge", "last_call", "brief", "recap"]);
 const STATUS_WORD = { done: ["Done", "good"], clean: ["Kept", "good"], missed: ["Missed", "bad"], violated: ["Broken", "bad"],
   pending: ["Open", ""], waiting: ["After waking", ""] };
 const $ = (id) => document.getElementById(id);
+const dayMin = (hhmm) => { const [h, m] = hhmm.split(":").map(Number); return (h * 60 + m - 240 + 1440) % 1440; };  // day starts 04:00
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
 let S = null, tab = "assistant", playing = false, inflight = false, acc = 0, unread = false;
 let showAllEarlier = false, openWhy = null, toastTimer = null, editing = null, tomorrowOpen = false;
+const openAgents = new Set();  // agents whose goal list is unfolded
 
 
 // ---------- API & message routing ----------
@@ -443,13 +456,28 @@ function renderAgents() {
   const scores = Object.fromEntries(S.contracts.map((c) => [c.id, c.score]));
   $("agents").innerHTML = S.agents.map((a) => {
     const score = a.enabled && scores[a.id] != null ? ` · score ${scores[a.id]}` : a.enabled ? "" : " · off";
-    return `<div class="agent ${a.enabled ? "" : "off"}">
-      <div class="agent-head"><div><b>${esc(a.name)}</b><div class="dom">${esc(a.domain[0].toUpperCase() + a.domain.slice(1))}${score}</div></div>
+    const open = openAgents.has(a.id), on = a.goals.filter((g) => g.enabled).length;
+    return `<div class="agent ${a.enabled ? "" : "off"} ${open ? "open" : ""}">
+      <div class="agent-head">
+        <button class="fold-agent" data-fold="${a.id}" aria-expanded="${open}" title="${open ? "Hide" : "Show"} goals">
+          <span class="chev">›</span><span><b>${esc(a.name)}</b>
+          <span class="dom">${a.domain.toLowerCase() === a.name.toLowerCase() ? "" : `${esc(a.domain[0].toUpperCase() + a.domain.slice(1))} · `}${on}/${a.goals.length} goals${score}</span></span></button>
+        <button class="gear" data-setup="${a.id}" title="Set up ${esc(a.name)} (coming soon)" aria-label="Set up ${esc(a.name)}">⚙︎</button>
         ${toggle(a.name, a.enabled, `data-agent="${a.id}"`)}</div>
-      <ul class="goals">${a.goals.map((g) => `<li class="${g.enabled ? "" : "off"}"><span>${ICONS[g.action] || "•"} ${esc(g.label)}</span>
+      <ul class="goals" ${open ? "" : "hidden"}>${a.goals.map((g) => `<li class="${g.enabled ? "" : "off"}">
+        <span>${ICONS[g.action] || "•"} ${esc(g.label)}${g.days.length ? ` <em class="days">${g.days.map((d) => DAY_SHORT[d]).join(" · ")}</em>` : ""}</span>
         ${toggle(g.label, g.enabled, `data-agent="${a.id}" data-goal="${g.id}"`, true, !a.enabled)}</li>`).join("")}</ul>
     </div>`;
   }).join("");
+  $("agents").querySelectorAll("[data-fold]").forEach((b) => (b.onclick = () => {
+    const id = b.dataset.fold;
+    openAgents.has(id) ? openAgents.delete(id) : openAgents.add(id);
+    renderAgents();
+  }));
+  $("agents").querySelectorAll("[data-setup]").forEach((b) => (b.onclick = () => {
+    const a = S.agents.find((x) => x.id === b.dataset.setup);
+    showToast({ kind: "info", at: S.clock, text: `${a.name} setup is coming soon.` });
+  }));
   $("agents").querySelectorAll("input").forEach((input) => (input.onchange = () => {
     const { agent, goal } = input.dataset;
     const name = goal ? S.agents.find((a) => a.id === agent).goals.find((g) => g.id === goal).label : S.agents.find((a) => a.id === agent).name;
@@ -622,7 +650,8 @@ function bindEditor() {
   $("ed-cancel").onclick = () => { editing = null; renderToday(); };
   $("ed-save").onclick = async () => {
     const at = $("ed-at").value;
-    if (happened && (!at || at < item.edit.min || at > item.edit.max)) return fail(`Pick a time between ${item.edit.min} and ${item.edit.max}.`);
+    const inRange = at && dayMin(at) >= dayMin(item.edit.min) && dayMin(at) <= dayMin(item.edit.max);
+    if (happened && !inRange) return fail(`Pick a time between ${item.edit.min} and ${item.edit.max}.`);
     const body = { contract_id: item.contract_id, rule_id: item.rule_id, happened, at,
       duration: $("ed-dur")?.value || "", comment: $("ed-cmt").value };
     try {
@@ -711,7 +740,6 @@ $("jump-form").onsubmit = async (e) => {
   e.preventDefault();
   setPlaying(false); editing = null;
   const at = $("jump").value;
-  const dayMin = (hhmm) => { const [h, m] = hhmm.split(":").map(Number); return (h * 60 + m - 240 + 1440) % 1440; };  // day starts 04:00
   if (dayMin(at) <= dayMin(S.clock)) clearPanels();  // going back replays the day
   await api("jump", { at });
   logControl("Clock moved", `to ${at}`);

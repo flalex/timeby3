@@ -56,6 +56,7 @@ class Rule:
     label: str = ""            # short app-facing name, e.g. "Breakfast"
     duration: int | None = None  # planned minutes the activity takes (do/regularity)
     reopens: str | None = None   # avoid only: anchor (next day) when the limit lifts, e.g. "wake"
+    days: tuple[str, ...] = ()   # weekdays it applies (mon..sun); empty = every day
     lookback_days: int = 7     # regularity only
 
 
@@ -93,6 +94,7 @@ class Profile:
 class Event:
     action: str
     at: datetime
+    goal: str | None = None  # rule id when the owner tied this event to a goal (beats window-based guessing)
 
 
 @dataclass(frozen=True)

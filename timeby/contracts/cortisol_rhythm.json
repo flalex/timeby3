@@ -59,7 +59,7 @@
     },
     {
       "id": "no_late_intense_exercise", "title": "No intense exercise in the last hour", "label": "No hard workouts", "phase": "evening", "kind": "avoid",
-      "actions": ["exercise_intense"], "window": {"anchor": "sleep", "start": -60, "end": 0},
+      "actions": ["exercise_intense", "padel", "surf"], "window": {"anchor": "sleep", "start": -60, "end": 0},
       "weight": 2, "strength": "moderate",
       "why": "Evening exercise is fine in general, but vigorous exercise within ~1 hour of bedtime impairs sleep onset.",
       "advice": "Keep it to light stretching this close to bed.",

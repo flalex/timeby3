@@ -6,7 +6,7 @@ from datetime import date, datetime, timedelta
 from typing import Protocol
 
 from . import engine, intents, narration
-from .model import Contract, ContractReport, Event, Message, Profile, Recommendation, RuleResult
+from .model import Contract, ContractReport, Event, Message, Profile, Recommendation, RuleKind, RuleResult
 
 ROUTINE_WINDOW = timedelta(hours=3)  # brief/recap only fire this soon after their anchor
 RECAP_GRACE = timedelta(hours=1)     # without an observed bedtime, recap this long after the planned one
@@ -170,15 +170,27 @@ class Assistant:
         """Rewrite today's events for a goal: did its action happen (and when), or not.
         For a limit (avoid) 'happened' means it was broken."""
         result, _ = self._lookup((contract_id, rule_id), now)
-        actions, start, end = result.rule.actions, result.start, result.end
+        rule, day = result.rule, self.ctx.logical_day(now)
+        earliest, latest = self.correctable_range(result, now)
         at = at or min(result.anchor_at, now)
-        latest = min(end - timedelta(minutes=1), now)
-        if happened and not start <= at <= latest:
-            raise ValueError(f"time must be between {start:%H:%M} and {latest:%H:%M}")
-        self.events = [e for e in self.events if not (e.action in actions and start <= e.at < end)]
-        if happened:
-            self.events.append(Event(actions[0], at))
+        if happened and not earliest <= at <= latest:
+            raise ValueError(f"time must be between {earliest:%H:%M} and {latest:%H:%M}")
+        self.events = [e for e in self.events if not self._belongs(e, rule, result, day)]
+        if happened:  # a task's event is tied to its goal, so a late breakfast stays breakfast
+            self.events.append(Event(rule.actions[0], at, None if rule.kind is RuleKind.AVOID else rule.id))
             self.events.sort(key=lambda e: e.at)
+
+    def correctable_range(self, result: RuleResult, now: datetime) -> tuple[datetime, datetime]:
+        """Tasks can be logged any time today (late is still real); a limit only within its window."""
+        if result.rule.kind is RuleKind.AVOID:
+            return result.start, min(result.end - timedelta(minutes=1), now)
+        day_start = datetime.combine(self.ctx.logical_day(now), self.profile.day_start)
+        return day_start, now
+
+    def _belongs(self, e: Event, rule, result: RuleResult, day: date) -> bool:
+        if e.goal:
+            return e.goal == rule.id and self.ctx.logical_day(e.at) == day
+        return e.action in rule.actions and result.start <= e.at < result.end
 
     def annotate(self, contract_id: str, rule_id: str, now: datetime,
                  duration: int | None = None, comment: str = "") -> None:

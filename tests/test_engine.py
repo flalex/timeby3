@@ -152,7 +152,7 @@ def test_one_reminder_per_rule_last_call_only_without_nudge():
 
 
 def test_brief_covers_focus_reminder_due_soon():
-    a = new_assistant()
+    a = Assistant(PROFILE, [CONTRACTS["cortisol_rhythm"]], ACTIONS, Inbox())
     a.log("wake", at("07:00", DAY - timedelta(days=1)))  # yesterday: no daylight → focus = morning_light
     a.log("wake", at("07:00"))
     assert ("brief", "brief") in kinds(a.tick(at("07:00")))
@@ -250,8 +250,8 @@ def test_switching_off_an_agent_disables_all_its_goals_but_remembers_them():
     a = new_assistant()
     a.set_enabled("meal_regularity", False, "regular_lunch")
     a.set_enabled("meal_regularity", False)
-    assert [rep.contract.id for rep in a.status(at("12:00"))] == ["cortisol_rhythm"]
-    assert not a.tick(at("12:15"))  # lunch nudge silenced
+    assert "meal_regularity" not in [rep.contract.id for rep in a.status(at("12:00"))]
+    assert "regular_lunch" not in [m.rule_id for m in a.tick(at("12:15"))]  # lunch nudge silenced
     a.set_enabled("meal_regularity", True)
     meal = next(rep for rep in a.status(at("12:00")) if rep.contract.id == "meal_regularity")
     assert "regular_lunch" not in {r.rule.id for r in meal.results}  # goal-level choice kept
@@ -301,13 +301,25 @@ def test_v3_recap_waits_for_actual_lights_out():
     assert ("recap", "recap") in kinds(a.tick(at("00:51", DAY + timedelta(days=1))))
 
 
-def test_correct_rejects_times_outside_window_or_in_future():
+def test_correct_accepts_late_task_but_rejects_future_and_limit_outside_window():
     a = v3_assistant()
-    with pytest.raises(ValueError, match="between"):
-        a.correct("meal_regularity", "regular_lunch", True, at("15:00"), at("15:30"))  # window ends 14:00
+    a.correct("meal_regularity", "regular_lunch", True, at("15:00"), at("15:30"))  # late lunch is still lunch
+    lunch = result_of(a, "regular_lunch", at("15:30"))
+    assert lunch.status is Status.MISSED and lunch.hit_at == at("15:00")
     a.log("wake", at("07:00"))
     with pytest.raises(ValueError, match="between"):
         a.correct("cortisol_rhythm", "morning_light", True, at("07:35"), at("07:30"))  # in the future
+    with pytest.raises(ValueError, match="between"):
+        a.correct("cortisol_rhythm", "caffeine_cutoff", True, at("10:00"), at("18:00"))  # limit not active then
+
+
+def test_late_breakfast_tied_to_goal_is_not_read_as_lunch_but_breaks_limits():
+    a = v3_assistant()
+    a.correct("meal_regularity", "regular_breakfast", True, at("11:15"), at("11:30"))
+    assert result_of(a, "regular_breakfast", at("11:30")).hit_at == at("11:15")
+    assert result_of(a, "regular_lunch", at("11:30")).hit_at is None  # 11:15 is inside lunch's window
+    a.correct("meal_regularity", "regular_dinner", True, at("20:30"), at("21:00"))
+    assert result_of(a, "no_late_eating", at("21:00")).status is Status.VIOLATED
 
 
 def test_simulation_jump_forward_back_and_early_start():
@@ -317,3 +329,12 @@ def test_simulation_jump_forward_back_and_early_start():
     assert s.now == at("14:00")
     s.jump("05:30")
     assert s.now == at("05:30") and not any(e.at.date() == DAY for e in s.assistant.events)
+
+
+def test_weekday_goals_only_apply_on_their_days():
+    sunday = date(2026, 10, 18)
+    monday = sunday + timedelta(days=1)
+    a = new_assistant()
+    ids = lambda day: {r.rule.id for rep in a.status(at("12:00", day)) for r in rep.results}
+    assert "surfing" in ids(sunday) and "workout" not in ids(sunday)
+    assert "workout" in ids(monday) and "surfing" not in ids(monday)

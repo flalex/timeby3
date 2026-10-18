@@ -8,13 +8,14 @@ from .sleep_plan import WakePlan
 
 
 def build_today(reports: list[ContractReport], now: datetime, notes: dict | None = None,
-                wake: WakePlan | None = None) -> dict:
+                wake: WakePlan | None = None, day_start: datetime | None = None) -> dict:
     notes = notes or {}
+    day_start = day_start or now.replace(hour=0, minute=0)
     slots = {"earlier": [], "now": [], "later": [], "avoid_now": []}
     for rep in reports:
         for r in rep.results:
             item = _place(rep, r, now)
-            item.update(_extras(rep, r, item, notes.get((rep.contract.id, r.rule.id), {}), wake, now))
+            item.update(_extras(rep, r, item, notes.get((rep.contract.id, r.rule.id), {}), wake, now, day_start))
             slots[item["slot"]].append(item)
     by_time = lambda item: item["sort"]
     current = sorted(slots["now"], key=lambda item: (item["minutes_left"], -item["weight"]))
@@ -81,7 +82,8 @@ def _item(rep: ContractReport, r: RuleResult, slot: str, at: datetime, *, opens:
 
 # --- details: duration, limits, notes, editing ------------------------------------------------
 
-def _extras(rep: ContractReport, r: RuleResult, item: dict, note: dict, wake: WakePlan | None, now: datetime) -> dict:
+def _extras(rep: ContractReport, r: RuleResult, item: dict, note: dict, wake: WakePlan | None,
+            now: datetime, day_start: datetime) -> dict:
     rule = r.rule
     extras = {"duration": note.get("duration") or _planned_duration(r, wake), "comment": note.get("comment", "")}
     if rule.kind is RuleKind.AVOID and r.until:
@@ -89,9 +91,11 @@ def _extras(rep: ContractReport, r: RuleResult, item: dict, note: dict, wake: Wa
     if item["slot"] == "earlier":
         happened = r.hit_at is not None
         default_at = r.hit_at or (r.anchor_at if rule.kind is RuleKind.REGULARITY else r.start)
-        latest = min(r.end - timedelta(minutes=1), now)
+        # same range Assistant.correctable_range enforces: tasks any time today, limits only in their window
+        earliest, latest = (r.start, min(r.end - timedelta(minutes=1), now)) if rule.kind is RuleKind.AVOID \
+            else (day_start, now)
         extras["edit"] = {"happened": happened, "at": f"{min(default_at, latest):%H:%M}",
-                          "min": f"{r.start:%H:%M}", "max": f"{latest:%H:%M}"}
+                          "min": f"{earliest:%H:%M}", "max": f"{latest:%H:%M}"}
     return extras
 
 

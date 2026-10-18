@@ -1,0 +1,34 @@
+{
+  "id": "business",
+  "name": "Business",
+  "domain": "business",
+  "goal": "Protect a daily focused block for development and a fixed slot for marketing.",
+  "sources": {
+    "mark2008": "Mark G, Gudith D, Klocke U. The cost of interrupted work: more speed and stress. Proc CHI, 2008.",
+    "ericsson1993": "Ericsson KA, Krampe RT, Tesch-Römer C. The role of deliberate practice in the acquisition of expert performance. Psychol Rev, 1993.",
+    "lally2010": "Lally P, van Jaarsveld CHM, Potts HWW, Wardle J. How are habits formed: modelling habit formation in the real world. Eur J Soc Psychol, 2010."
+  },
+  "phases": [
+    {"id": "work", "goal": "Focused work first, outward work after lunch", "window": {"anchor": "wake", "start": 60, "end": 660}}
+  ],
+  "rules": [
+    {
+      "id": "development", "title": "Focused development block", "label": "Development", "duration": 120,
+      "phase": "work", "kind": "do", "actions": ["dev_work"], "window": {"anchor": "wake", "start": 120, "end": 300},
+      "weight": 3, "strength": "moderate",
+      "why": "Interruptions raise stress and time pressure; experts do their hardest practice in limited, protected morning sessions.",
+      "advice": "Two hours of development with notifications off.",
+      "sources": ["mark2008", "ericsson1993"],
+      "nudge": {"at": 115, "text": "Focused block starts in 5 minutes: development. Notifications off."}
+    },
+    {
+      "id": "marketing", "title": "Marketing slot", "label": "Marketing", "duration": 60,
+      "phase": "work", "kind": "do", "actions": ["marketing_work"], "window": {"anchor": "lunch", "start": 60, "end": 240},
+      "weight": 2, "strength": "emerging",
+      "why": "Doing the same task in the same slot every day makes it automatic faster than doing it whenever there is time.",
+      "advice": "One hour of marketing after lunch.",
+      "sources": ["lally2010"],
+      "nudge": {"at": 55, "text": "Marketing slot in 5 minutes."}
+    }
+  ]
+}

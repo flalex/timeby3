@@ -9,5 +9,9 @@
   "exercise_intense": "Intense exercise (HIIT, heavy lifting, hard cardio)",
   "wind_down": "Wind-down routine (dim lights, reading, breathing)",
   "meal": "Meal",
-  "snack": "Snack"
+  "snack": "Snack",
+  "surf": "Surfing session",
+  "padel": "Padel game",
+  "dev_work": "Development work (focused block)",
+  "marketing_work": "Marketing work"
 }

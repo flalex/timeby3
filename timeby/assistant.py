@@ -6,6 +6,7 @@ from datetime import date, datetime, timedelta
 from typing import Protocol
 
 from . import engine, intents, narration
+from .recovery import RecoveryPlan, build_recovery
 from .model import Contract, ContractReport, Event, Message, Profile, Recommendation, RuleKind, RuleResult
 
 ROUTINE_WINDOW = timedelta(hours=3)  # brief/recap only fire this soon after their anchor
@@ -33,6 +34,8 @@ class Assistant:
         self.disabled_contracts: set[str] = set()
         self.disabled_rules: set[tuple[str, str]] = set()
         self.notes: dict[tuple[date, str, str], dict] = {}  # owner's duration/comment per goal per day
+        self.late_starts: dict[date, RecoveryPlan] = {}       # recovery plan of a day that started late
+        self.skipped: set[tuple[date, str, str]] = set()      # goals the recovery plan dropped (no reminders)
         self.actions = actions
         self.notifier = notifier
         self.wake_anchor = wake_anchor
@@ -111,7 +114,18 @@ class Assistant:
         reports = self.status(now)
         candidates = self._routines(day, reports, now)  # first, so the brief can cover reminders due now
         candidates += [m for rep in reports for m in engine.due_reminders(rep, self.ctx, now)]
+        candidates = [m for m in candidates if not self._held(day, m, now)]
         return self._send([m for m in candidates if self._claim(day, m, now)])
+
+    def _held(self, day: date, m: Message, now: datetime) -> bool:
+        """No reminders for goals the recovery plan dropped, and none but the wake-up call while still asleep."""
+        if m.kind not in ("nudge", "last_call"):
+            return False
+        if (day, m.contract_id, m.rule_id) in self.skipped:
+            return True
+        ctx = self.ctx
+        asleep = ctx.observed(self.wake_anchor, day) is None and now >= ctx.planned_anchor(self.wake_anchor, day)
+        return self.wait_for_observed and asleep and self._rule(m.contract_id, m.rule_id).window.anchor != self.wake_anchor
 
     def _claim(self, day: date, m: Message, now: datetime) -> bool:
         key, rule_key = (day, m.kind, m.contract_id, m.rule_id), (day, m.contract_id, m.rule_id)
@@ -139,17 +153,35 @@ class Assistant:
         sleep = ctx.observed(self.sleep_anchor, day) or ctx.planned_anchor(self.sleep_anchor, day) + grace
         messages = []
         if wake and wake <= now < wake + ROUTINE_WINDOW:
-            has_history = ctx.first_day(day) < day
-            yesterday = self.status(datetime.combine(day, self.profile.day_start) - timedelta(minutes=1)) \
-                if has_history else []
-            focus = narration.focus(yesterday)
-            mentions = [(self._contract_of(focus.rule).id, focus.rule.id)] if focus else []
-            messages.append(Message(wake, "brief", "", "brief",
-                                    narration.morning_brief(yesterday, reports, self.wake_anchor, not self.compact_routines),
-                                    {"mentions": mentions}))
+            messages.append(self._morning_message(day, reports, wake, now))
         if sleep <= now < sleep + ROUTINE_WINDOW:
             messages.append(Message(sleep, "recap", "", "recap", narration.evening_recap(reports, not self.compact_routines)))
         return messages
+
+    def _morning_message(self, day: date, reports: list[ContractReport], wake: datetime, now: datetime) -> Message:
+        """The brief — or, after a late wake-up, one recovery plan instead of a cascade of misses."""
+        usual = self.ctx.planned_anchor(self.wake_anchor, day)
+        if self.wait_for_observed and wake - usual > timedelta(minutes=self._wake_tolerance()):
+            plan = self.late_starts.get(day) or build_recovery(reports, wake, usual, now, self.wake_anchor)
+            self.late_starts[day] = plan
+            self.skipped |= {(day, cid, rid) for cid, rid in plan.skipped_ids}
+            return Message(wake, "recovery", "", "recovery", narration.recovery_message(plan), {"mentions": plan.mentions})
+        ctx = self.ctx
+        yesterday = self.status(datetime.combine(day, self.profile.day_start) - timedelta(minutes=1)) \
+            if ctx.first_day(day) < day else []
+        focus = narration.focus(yesterday)
+        mentions = [(self._contract_of(focus.rule).id, focus.rule.id)] if focus else []
+        return Message(wake, "brief", "", "brief",
+                       narration.morning_brief(yesterday, reports, self.wake_anchor, not self.compact_routines),
+                       {"mentions": mentions})
+
+    def _wake_tolerance(self) -> int:
+        wake_goals = [r for c in self.active for r in c.rules
+                      if r.kind is RuleKind.REGULARITY and r.window.anchor == self.wake_anchor]
+        return wake_goals[0].tolerance if wake_goals else 30
+
+    def _rule(self, contract_id: str, rule_id: str):
+        return next(r for c in self.contracts if c.id == contract_id for r in c.rules if r.id == rule_id)
 
     # --- read models ------------------------------------------------------------------------
 

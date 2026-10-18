@@ -28,7 +28,8 @@
       "tolerance": 30, "lookback_days": 7, "weight": 2, "strength": "moderate",
       "why": "The cortisol awakening response is triggered by the act of waking; a stable wake time keeps the daily cortisol curve anchored.",
       "advice": "Get up at your planned wake time, weekends included.",
-      "sources": ["fries2009", "clow2010"]
+      "sources": ["fries2009", "clow2010"],
+      "nudge": {"at": 0, "text": "⏰ Time to get up — same time as every day keeps your cortisol peak on schedule."}
     },
     {
       "id": "morning_light", "title": "Bright light soon after waking", "label": "Get daylight", "duration": 15, "phase": "morning", "kind": "do",
@@ -37,6 +38,8 @@
       "why": "Moving from dim to bright light in the morning produces an immediate cortisol rise; dawn light enhances the awakening response.",
       "advice": "Get 10+ minutes of outdoor daylight (or bright light) within an hour of waking.",
       "sources": ["leproult2001", "thorn2004"],
+      "pairs": [{"with": "regular_breakfast", "text": "Have breakfast outside or by a bright window — daylight and breakfast in one."},
+                {"with": "morning_movement", "text": "Walk outside for 15 minutes — daylight and movement in one."}],
       "nudge": {"at": 10, "text": "Step outside or into bright light for 10+ minutes in the next hour — it boosts your morning cortisol peak."}
     },
     {

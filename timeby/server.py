@@ -11,6 +11,7 @@ from .assistant import Assistant
 from .demo import PROFILE, seed_history
 from .loader import load_actions, load_contracts
 from .model import ContractReport, Message, RuleKind, RuleResult, Status
+from .connectors import CONNECTORS
 from .scenarios import DEFAULT, SCENARIOS, TYPICAL_WEEK, YOU
 from .sleep_plan import plan_wake
 from .today import build_today
@@ -192,18 +193,29 @@ class Simulation:
             "timeline": self._timeline(reports, day),
             "now_card": self._now_card(reports, now),
             "today": build_today(reports, now, self.assistant.notes_for(day), plan_wake(ctx, now),
-                                 datetime.combine(day, self.assistant.profile.day_start)),
+                                 datetime.combine(day, self.assistant.profile.day_start),
+                                 self.assistant.late_starts.get(day),
+                                 {rid for d, _, rid in self.assistant.skipped if d == day}),
             "scenario": self.scenario.id,
             "scenarios": [{"id": sc.id, "label": sc.label, "description": sc.description} for sc in SCENARIOS.values()],
             "agents": self._agents(),
+            "connectors": self._connectors(),
         }
 
     def _agents(self) -> list[dict]:
         a = self.assistant
         return [{"id": c.id, "name": c.name, "domain": c.domain, "goal": c.goal, "enabled": a.is_enabled(c.id),
                  "goals": [{"id": r.id, "label": r.label, "kind": r.kind.value, "action": r.actions[0], "days": list(r.days),
+                            "topic": r.topic,
                             "enabled": (c.id, r.id) not in a.disabled_rules} for r in c.rules]}
                 for c in a.contracts]
+
+    def _connectors(self) -> list[dict]:
+        """Each connector with the goals it would automate (from the actions it reads)."""
+        goals = [r for c in self.assistant.contracts for r in c.rules if r.kind is not RuleKind.AVOID]
+        return [{"id": k.id, "name": k.name, "icon": k.icon, "providers": k.providers, "does": k.does,
+                 "status": k.status, "automates": [r.label for r in goals if set(r.actions) & set(k.reads)]}
+                for k in CONNECTORS]
 
     # --- v2 read models ---------------------------------------------------------------------
 

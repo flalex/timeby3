@@ -81,6 +81,8 @@ def evaluate_rule(rule: Rule, ctx: Context, now: datetime) -> RuleResult:
 def _earned(rule: Rule, status: Status) -> float | None:
     if status in POSITIVE:
         return rule.weight
+    if status is Status.LATE:
+        return rule.weight * rule.late_credit
     return 0.0 if status in NEGATIVE else None
 
 
@@ -125,7 +127,7 @@ def _judge_window(rule: Rule, ctx: Context, now: datetime) -> RuleResult:
     if _waits_for_anchor(rule, ctx, day) and not hit and not over:
         status = Status.WAITING
     elif rule.kind is RuleKind.DO:  # a goal-tied event outside the window happened, but late
-        status = Status.DONE if on_time else Status.MISSED if hit or over else Status.PENDING
+        status = Status.DONE if on_time else Status.LATE if hit else Status.MISSED if over else Status.PENDING
         hits = on_time or hits
     else:
         status = Status.VIOLATED if hit else Status.CLEAN if over else Status.PENDING
@@ -146,7 +148,7 @@ def _judge_regularity(rule: Rule, ctx: Context, now: datetime) -> RuleResult:
     today = ctx.logical_day(now)
     first = ctx.first_day(today)
     days = [today - timedelta(days=i) for i in range(rule.lookback_days)]
-    judged, on_time, devs, today_status, today_hit = 0, 0, [], Status.PENDING, None
+    judged, on_time, credit, devs, today_status, today_hit = 0, 0, 0.0, [], Status.PENDING, None
 
     for day in (d for d in days if d >= first):
         judgeable, hit_at = _closest_hit(rule, ctx, day, now)
@@ -154,14 +156,16 @@ def _judge_regularity(rule: Rule, ctx: Context, now: datetime) -> RuleResult:
             continue
         dev = round((hit_at - ctx.planned_anchor(rule.window.anchor, day)).total_seconds() / 60) if hit_at else None
         ok = dev is not None and abs(dev) <= rule.tolerance
+        status = Status.DONE if ok else Status.LATE if dev is not None else Status.MISSED
         judged += 1
         on_time += ok
+        credit += 1.0 if ok else rule.late_credit if dev is not None else 0.0
         if dev is not None:
             devs.append(dev)
         if day == today:
-            today_status, today_hit = (Status.DONE if ok else Status.MISSED), hit_at
+            today_status, today_hit = status, hit_at
 
-    earned = rule.weight * on_time / judged if judged else None
+    earned = rule.weight * credit / judged if judged else None
     return _result(rule, ctx, today, today_status, earned, _regularity_detail(rule, judged, on_time, devs), today_hit)
 
 
@@ -220,6 +224,8 @@ def deadline_offset(rule: Rule) -> int:
 
 def reminder(rule: Rule, anchor_at: datetime) -> Reminder | None:
     """At most one scheduled reminder per rule: its contract nudge, else a last call before the deadline."""
+    if not rule.remind:
+        return None
     if rule.nudge:
         return Reminder(anchor_at + timedelta(minutes=rule.nudge.at), "nudge",
                         anchor_at + timedelta(minutes=rule.window.end), rule.nudge.text)

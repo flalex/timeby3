@@ -62,6 +62,24 @@ def evening_recap(reports: list[ContractReport], itemized: bool = True) -> str:
     return "\n".join(lines)
 
 
+def recovery_message(plan) -> str:
+    """One plan after a late wake-up: what to do now, what is still worth it, what is dropped, what stays."""
+    lines = [f"⏰ Late start: up at {plan.wake_at:%H:%M}, {plan.delay_min} min after your usual {plan.usual:%H:%M}. The plan:"]
+    if plan.now_items:
+        lines.append("Now: " + ", ".join(f"{label} (by {due:%H:%M})" for label, due in plan.now_items))
+    lines += [f"Tip: {text}" for text in plan.combos]
+    if plan.late_items:
+        lines.append("Late but worth it: " + ", ".join(f"{label} (until {end:%H:%M})" for label, end in plan.late_items))
+    if plan.shifted:
+        lines.append("Moved with your wake-up: " + ", ".join(f"{label} from {at:%H:%M}" for label, at in plan.shifted))
+    if plan.skipped:
+        lines.append("Skipped: " + "; ".join(f"{label} — {why}" for label, why in plan.skipped))
+    if plan.unchanged:
+        lines.append("Unchanged: " + " · ".join(f"{label} {at:%H:%M}" for label, at in plan.unchanged)
+                     + ". Keep these — one late morning shouldn't shift your whole day.")
+    return "\n".join(lines)
+
+
 def status_reply(reports: list[ContractReport]) -> str:
     lines = []
     for rep in reports:
@@ -86,7 +104,7 @@ def why_reply(result: RuleResult, sources: dict[str, str]) -> str:
     return f"{result.rule.title} ({result.rule.strength} evidence): {result.rule.why}\nSources:\n{refs}"
 
 
-_ICON = {Status.DONE: "✓", Status.CLEAN: "✓", Status.MISSED: "✗", Status.VIOLATED: "⚠", Status.PENDING: "·", Status.WAITING: "…"}
+_ICON = {Status.DONE: "✓", Status.CLEAN: "✓", Status.MISSED: "✗", Status.VIOLATED: "⚠", Status.PENDING: "·", Status.WAITING: "…", Status.LATE: "◐"}
 
 
 def feedback(result: RuleResult) -> str:

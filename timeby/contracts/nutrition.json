@@ -1,0 +1,320 @@
+{
+  "id": "nutrition",
+  "name": "Nutrition",
+  "domain": "nutrition",
+  "goal": "Regular meal times, enough water, plenty of plants and a protein-rich breakfast.",
+  "sources": {
+    "pot2016": "Pot GK, Almoosawi S, Stephen AM. Meal irregularity and cardiometabolic consequences: results from observational and intervention studies. Proc Nutr Soc, 2016.",
+    "farshchi2005": "Farshchi HR, Taylor MA, Macdonald IA. Beneficial metabolic effects of regular meal frequency on dietary thermogenesis, insulin sensitivity, and fasting lipid profiles in healthy obese women. Am J Clin Nutr, 2005.",
+    "wehrens2017": "Wehrens SMT et al. Meal timing regulates the human circadian system. Curr Biol, 2017.",
+    "stonge2017": "St-Onge MP et al. Meal timing and frequency: implications for cardiovascular disease prevention. A scientific statement from the American Heart Association. Circulation, 2017.",
+    "gu2020": "Gu C et al. Metabolic effects of late dinner in healthy volunteers: a randomized crossover clinical trial. J Clin Endocrinol Metab, 2020.",
+    "popkin2010": "Popkin BM, D'Anci KE, Rosenberg IH. Water, hydration, and health. Nutr Rev, 2010.",
+    "armstrong2012": "Armstrong LE et al. Mild dehydration affects mood in healthy young women. J Nutr, 2012.",
+    "aune2017": "Aune D et al. Fruit and vegetable intake and the risk of cardiovascular disease, total cancer and all-cause mortality: a systematic review and dose-response meta-analysis of prospective studies. Int J Epidemiol, 2017.",
+    "leidy2013": "Leidy HJ et al. Beneficial effects of a higher-protein breakfast on the appetitive, hormonal, and neural signals controlling energy intake regulation in overweight/obese, breakfast-skipping, late-adolescent girls. Am J Clin Nutr, 2013."
+  },
+  "phases": [
+    {
+      "id": "day",
+      "goal": "Same meal times, every day",
+      "window": {
+        "anchor": "wake",
+        "start": 0,
+        "end": 1080
+      }
+    }
+  ],
+  "rules": [
+    {
+      "id": "regular_breakfast",
+      "title": "Breakfast at the usual time",
+      "label": "Breakfast",
+      "duration": 20,
+      "phase": "day",
+      "kind": "regularity",
+      "actions": [
+        "meal"
+      ],
+      "window": {
+        "anchor": "breakfast",
+        "start": -90,
+        "end": 90
+      },
+      "tolerance": 30,
+      "lookback_days": 7,
+      "weight": 2,
+      "strength": "moderate",
+      "why": "A regular meal pattern improves insulin sensitivity and thermogenesis compared with an irregular one; meal timing entrains peripheral body clocks.",
+      "advice": "Have breakfast at your usual time.",
+      "sources": [
+        "farshchi2005",
+        "pot2016",
+        "wehrens2017"
+      ],
+      "nudge": {
+        "at": -15,
+        "text": "Breakfast in 15 minutes — same time as usual keeps your metabolic clock in sync."
+      },
+      "topic": "Meal regularity",
+      "pairs": [
+        {
+          "with": "protein_breakfast",
+          "text": "Make it protein-rich: eggs, yogurt or cottage cheese."
+        }
+      ]
+    },
+    {
+      "id": "regular_lunch",
+      "title": "Lunch at the usual time",
+      "label": "Lunch",
+      "duration": 30,
+      "phase": "day",
+      "kind": "regularity",
+      "actions": [
+        "meal"
+      ],
+      "window": {
+        "anchor": "lunch",
+        "start": -90,
+        "end": 90
+      },
+      "tolerance": 30,
+      "lookback_days": 7,
+      "weight": 2,
+      "strength": "moderate",
+      "why": "Irregular meal timing is associated with worse cardiometabolic markers; regular timing lets the body anticipate food.",
+      "advice": "Block lunch at your usual time.",
+      "sources": [
+        "pot2016",
+        "farshchi2005"
+      ],
+      "nudge": {
+        "at": -15,
+        "text": "Lunch in 15 minutes. Wrap up and keep the slot."
+      },
+      "topic": "Meal regularity",
+      "pairs": [
+        {
+          "with": "plants_lunch",
+          "text": "Fill half the plate with vegetables."
+        }
+      ]
+    },
+    {
+      "id": "regular_dinner",
+      "title": "Dinner at the usual time",
+      "label": "Dinner",
+      "duration": 30,
+      "phase": "day",
+      "kind": "regularity",
+      "actions": [
+        "meal"
+      ],
+      "window": {
+        "anchor": "dinner",
+        "start": -90,
+        "end": 90
+      },
+      "tolerance": 30,
+      "lookback_days": 7,
+      "weight": 2,
+      "strength": "moderate",
+      "why": "Consistent meal times are part of the AHA recommendation for intentional meal timing.",
+      "advice": "Have dinner at your usual time.",
+      "sources": [
+        "stonge2017",
+        "pot2016"
+      ],
+      "nudge": {
+        "at": -15,
+        "text": "Dinner in 15 minutes — at the usual time."
+      },
+      "topic": "Meal regularity",
+      "pairs": [
+        {
+          "with": "plants_dinner",
+          "text": "Fill half the plate with vegetables."
+        }
+      ]
+    },
+    {
+      "id": "no_late_eating",
+      "title": "No food within 3 h of bed",
+      "label": "Kitchen closed",
+      "reopens": "wake",
+      "phase": "day",
+      "kind": "avoid",
+      "actions": [
+        "meal",
+        "snack"
+      ],
+      "window": {
+        "anchor": "sleep",
+        "start": -180,
+        "end": 0
+      },
+      "weight": 2,
+      "strength": "moderate",
+      "why": "Late eating impairs glucose tolerance and fat oxidation compared with an earlier meal.",
+      "advice": "Kitchen is closed — water or herbal tea only.",
+      "sources": [
+        "gu2020",
+        "stonge2017"
+      ],
+      "nudge": {
+        "at": -195,
+        "text": "Kitchen closes in 15 minutes."
+      },
+      "topic": "Meal regularity"
+    },
+    {
+      "id": "water_on_waking",
+      "title": "Water after waking",
+      "label": "Water on waking",
+      "topic": "Hydration",
+      "duration": 5,
+      "phase": "day",
+      "kind": "do",
+      "actions": [
+        "water"
+      ],
+      "window": {
+        "anchor": "wake",
+        "start": 0,
+        "end": 60
+      },
+      "weight": 1,
+      "strength": "moderate",
+      "why": "You lose water overnight; even mild dehydration lowers mood and concentration.",
+      "advice": "A full glass of water before coffee.",
+      "sources": [
+        "popkin2010",
+        "armstrong2012"
+      ],
+      "nudge": {
+        "at": 5,
+        "text": "Glass of water before coffee — you lose water overnight."
+      }
+    },
+    {
+      "id": "water_afternoon",
+      "title": "Water through the afternoon",
+      "label": "Afternoon water",
+      "topic": "Hydration",
+      "duration": 5,
+      "phase": "day",
+      "kind": "do",
+      "actions": [
+        "water"
+      ],
+      "window": {
+        "anchor": "lunch",
+        "start": 60,
+        "end": 300
+      },
+      "weight": 1,
+      "strength": "emerging",
+      "why": "The afternoon dip is partly thirst: mild dehydration impairs attention and raises perceived effort.",
+      "advice": "Another glass or two before 17:30.",
+      "sources": [
+        "armstrong2012",
+        "popkin2010"
+      ],
+      "nudge": {
+        "at": 150,
+        "text": "Afternoon check: a glass of water now beats another coffee."
+      }
+    },
+    {
+      "id": "plants_lunch",
+      "title": "Vegetables with lunch",
+      "label": "Veg with lunch",
+      "topic": "Plants & fibre",
+      "phase": "day",
+      "kind": "do",
+      "actions": [
+        "vegetables"
+      ],
+      "window": {
+        "anchor": "lunch",
+        "start": -90,
+        "end": 90
+      },
+      "weight": 1,
+      "strength": "strong",
+      "remind": false,
+      "why": "Each extra daily portion of fruit and vegetables lowers cardiovascular and all-cause mortality, up to ~800 g a day.",
+      "advice": "Half the plate vegetables.",
+      "sources": [
+        "aune2017"
+      ],
+      "pairs": [
+        {
+          "with": "regular_lunch",
+          "text": "Have it with lunch."
+        }
+      ]
+    },
+    {
+      "id": "plants_dinner",
+      "title": "Vegetables with dinner",
+      "label": "Veg with dinner",
+      "topic": "Plants & fibre",
+      "phase": "day",
+      "kind": "do",
+      "actions": [
+        "vegetables"
+      ],
+      "window": {
+        "anchor": "dinner",
+        "start": -90,
+        "end": 90
+      },
+      "weight": 1,
+      "strength": "strong",
+      "remind": false,
+      "why": "Each extra daily portion of fruit and vegetables lowers cardiovascular and all-cause mortality, up to ~800 g a day.",
+      "advice": "Half the plate vegetables.",
+      "sources": [
+        "aune2017"
+      ],
+      "pairs": [
+        {
+          "with": "regular_dinner",
+          "text": "Have it with dinner."
+        }
+      ]
+    },
+    {
+      "id": "protein_breakfast",
+      "title": "Protein at breakfast",
+      "label": "Protein breakfast",
+      "topic": "Protein",
+      "phase": "day",
+      "kind": "do",
+      "actions": [
+        "protein_meal"
+      ],
+      "window": {
+        "anchor": "breakfast",
+        "start": -90,
+        "end": 90
+      },
+      "weight": 1,
+      "strength": "moderate",
+      "remind": false,
+      "why": "A higher-protein breakfast improves satiety signals and reduces evening snacking compared with a low-protein one.",
+      "advice": "Eggs, yogurt, cottage cheese or tofu.",
+      "sources": [
+        "leidy2013"
+      ],
+      "pairs": [
+        {
+          "with": "regular_breakfast",
+          "text": "Have it as your breakfast."
+        }
+      ]
+    }
+  ]
+}

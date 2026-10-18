@@ -19,6 +19,7 @@ class Status(str, Enum):
     CLEAN = "clean"
     VIOLATED = "violated"
     WAITING = "waiting"  # depends on an event (e.g. wake) that hasn't been observed yet
+    LATE = "late"        # done, but off schedule: earns the rule's late_credit share
 
 
 POSITIVE = {Status.DONE, Status.CLEAN}
@@ -36,6 +37,12 @@ class Window:
 class Nudge:
     at: int      # minutes relative to the rule's window anchor
     text: str
+
+
+@dataclass(frozen=True)
+class Pair:
+    with_rule: str  # id of a goal (any agent) that can be done together with this one
+    text: str       # how to combine them
 
 
 @dataclass(frozen=True)
@@ -57,6 +64,10 @@ class Rule:
     duration: int | None = None  # planned minutes the activity takes (do/regularity)
     reopens: str | None = None   # avoid only: anchor (next day) when the limit lifts, e.g. "wake"
     days: tuple[str, ...] = ()   # weekdays it applies (mon..sun); empty = every day
+    topic: str = ""              # groups goals inside an agent, e.g. "Meal regularity"
+    pairs: tuple[Pair, ...] = () # goals that can be combined with this one when time is short
+    late_credit: float = 0.5     # share of the weight earned when done late (doing it late beats skipping)
+    remind: bool = True          # False: no own reminder (e.g. raised together with a paired goal)
     lookback_days: int = 7     # regularity only
 
 

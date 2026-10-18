@@ -18,6 +18,9 @@ ACTION_KEYWORDS = {
     "padel": ["padel"],
     "dev_work": ["coding", "coded", "development", "deep work", "programming"],
     "marketing_work": ["marketing", "campaign", "newsletter"],
+    "water": ["water", "hydrated", "glass of water"],
+    "vegetables": ["vegetables", "veggies", "salad", "veg"],
+    "protein_meal": ["protein", "eggs", "yogurt", "cottage cheese"],
     "wake": ["woke", "wake", "awake", "got up", "good morning"],
     "sleep": ["bed", "sleep", "lights out", "good night", "goodnight"],
 }

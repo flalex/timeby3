@@ -4,28 +4,67 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 
 from .model import ContractReport, RuleKind, RuleResult, Status
+from .recovery import RecoveryPlan
 from .sleep_plan import WakePlan
+
+WAKE_ANCHOR = "wake"  # profile anchor of waking up; its regularity goal is the root of a late start
 
 
 def build_today(reports: list[ContractReport], now: datetime, notes: dict | None = None,
-                wake: WakePlan | None = None, day_start: datetime | None = None) -> dict:
-    notes = notes or {}
+                wake: WakePlan | None = None, day_start: datetime | None = None,
+                late_start: RecoveryPlan | None = None, skipped: set[str] | None = None) -> dict:
+    notes, skipped = notes or {}, skipped or set()
     day_start = day_start or now.replace(hour=0, minute=0)
     slots = {"earlier": [], "now": [], "later": [], "avoid_now": []}
     for rep in reports:
         for r in rep.results:
-            item = _place(rep, r, now)
+            item = _skipped_item(rep, r) if r.rule.id in skipped and r.status is Status.PENDING else _place(rep, r, now)
             item.update(_extras(rep, r, item, notes.get((rep.contract.id, r.rule.id), {}), wake, now, day_start))
             slots[item["slot"]].append(item)
     by_time = lambda item: item["sort"]
-    current = sorted(slots["now"], key=lambda item: (item["minutes_left"], -item["weight"]))
+    earlier = sorted(slots["earlier"], key=by_time)
+    current = sorted(slots["now"], key=lambda item: (item.get("late", False), item["minutes_left"], -item["weight"]))
+    leads = [i for i in current if i["remind"]]  # companion goals (no own reminder) never lead the Now card
+    hero = leads[0] if leads else None
+    if hero:
+        hero["pair"] = _pair_for(hero, current)
     return {
         "scores": [{"id": rep.contract.id, "name": rep.contract.name, "score": rep.score} for rep in reports],
-        "earlier": sorted(slots["earlier"], key=by_time),
-        "now": {"hero": current[0] if current else None, "also": current[1:], "avoid": slots["avoid_now"]},
+        "earlier": earlier,
+        "now": {"hero": hero, "also": [i for i in current if i is not hero], "avoid": slots["avoid_now"]},
         "later": sorted(slots["later"], key=by_time),
         "tomorrow": _tomorrow(wake) if wake else None,
+        "late_start": _mark_late_start(late_start, earlier, skipped),
     }
+
+
+def _skipped_item(rep: ContractReport, r: RuleResult) -> dict:
+    return _item(rep, r, "earlier", r.deadline, outcome="Skipped · late start", tone="skip")
+
+
+def _pair_for(hero: dict, current: list[dict]) -> dict | None:
+    """A goal that can be done together with the hero and is open right now."""
+    open_now = {i["rule_id"]: i for i in current}
+    for with_rule, text in hero["pairs"]:
+        partner = open_now.get(with_rule)
+        if partner:
+            return {"text": text, "rule_id": with_rule, "action": partner["action"], "title": partner["title"]}
+    return None
+
+
+def _mark_late_start(plan: RecoveryPlan | None, earlier: list[dict], skipped: set[str]) -> dict | None:
+    """Tag the misses a late wake-up caused, so the timeline shows one root cause instead of a wall of red."""
+    if not plan:
+        return None
+    caused = 0
+    for item in earlier:
+        knock_on = item["tone"] in ("bad", "skip") and item["sort"] <= plan.wake_at.isoformat() or item["rule_id"] in skipped
+        if item.get("root") or not knock_on:
+            continue
+        item["cause"] = "late_start"
+        caused += 1
+    return {"wake_at": f"{plan.wake_at:%H:%M}", "usual": f"{plan.usual:%H:%M}", "delay_min": plan.delay_min,
+            "caused": caused}
 
 
 # --- placement: earlier / now / later -------------------------------------------------------
@@ -51,13 +90,15 @@ def _place_task(rep: ContractReport, r: RuleResult, now: datetime) -> dict:
     planned = r.anchor_at if regular else r.start
     if r.status is Status.DONE:
         return _item(rep, r, "earlier", r.hit_at, outcome=f"{r.hit_at:%H:%M}", tone="good")
+    if r.status is Status.LATE:
+        credit = f"{round(r.rule.late_credit * 100)}% credit"
+        return _item(rep, r, "earlier", r.hit_at, outcome=f"Late · {r.hit_at:%H:%M} · {credit}", tone="late")
     if r.status is Status.MISSED:
-        late = f"Late · {r.hit_at:%H:%M}" if r.hit_at else "Missed"
-        return _item(rep, r, "earlier", r.hit_at or r.deadline, outcome=late, tone="bad")
+        return _item(rep, r, "earlier", r.deadline, outcome="Missed", tone="bad")
     if r.status is Status.WAITING:
         return _item(rep, r, "later", planned, time="After waking")
-    if now >= r.deadline:  # still loggable, but no longer on time
-        return _item(rep, r, "earlier", r.deadline, outcome="Missed", tone="bad")
+    if now >= r.deadline:  # off schedule but the window is still open: late, worth doing for partial credit
+        return _item(rep, r, "now", planned, opens=r.deadline, now=now, due=r.end, late=True)
     opens = r.anchor_at - timedelta(minutes=r.rule.tolerance) if regular else r.start
     if now >= opens:
         return _item(rep, r, "now", planned, opens=opens, now=now)
@@ -65,17 +106,20 @@ def _place_task(rep: ContractReport, r: RuleResult, now: datetime) -> dict:
 
 
 def _item(rep: ContractReport, r: RuleResult, slot: str, at: datetime, *, opens: datetime | None = None,
-          now: datetime | None = None, **extra) -> dict:
+          now: datetime | None = None, due: datetime | None = None, **extra) -> dict:
     item = {
         "slot": slot, "sort": at.isoformat(), "at": f"{at:%H:%M}",
         "contract_id": rep.contract.id, "rule_id": r.rule.id, "kind": r.rule.kind.value,
         "title": r.rule.label, "advice": r.rule.advice, "action": r.rule.actions[0], "weight": r.rule.weight,
+        "remind": r.rule.remind, "pairs": [(p.with_rule, p.text) for p in r.rule.pairs],
+        "root": r.rule.kind is RuleKind.REGULARITY and r.rule.window.anchor == WAKE_ANCHOR,
         **extra,
     }
     if slot == "now":
-        span = (r.deadline - opens).total_seconds() or 1
-        item["minutes_left"] = round((r.deadline - now).total_seconds() / 60)
-        item["by"] = f"{r.deadline:%H:%M}"
+        due = due or r.deadline
+        span = (due - opens).total_seconds() or 1
+        item["minutes_left"] = round((due - now).total_seconds() / 60)
+        item["by"] = f"{due:%H:%M}"
         item["progress"] = round(min(1.0, max(0.0, (now - opens).total_seconds() / span)), 3)
     return item
 

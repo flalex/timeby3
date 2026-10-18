@@ -56,7 +56,22 @@ body.live .demo-only { display: none !important; }
 @media (max-width: 860px) { .left { grid-template-columns: 1fr; } }
 .agents { background: var(--surface); border-radius: 16px; padding: 16px; box-shadow: var(--shadow); overflow-y: auto; flex: none; max-height: 60%; }
 @media (max-width: 1240px) { .agents { max-height: none; } }
-.agents h3 { margin: 0; font-size: 12px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); }
+.ltabs { display: flex; gap: 2px; margin: -6px -6px 8px; }
+.ltabs button { border: 0; background: none; padding: 6px 10px; border-radius: 8px; font-size: 13px; font-weight: 700;
+  color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+.ltabs button.on { background: var(--surface-2); color: var(--ink); }
+#lpane-agents[hidden], #lpane-connectors[hidden] { display: none; }
+.topic { font-size: 11px; font-weight: 700; color: var(--faint); text-transform: uppercase; letter-spacing: .06em; padding: 8px 0 2px; list-style: none; }
+.conn { border-top: 1px solid var(--line); padding: 12px 0; display: grid; grid-template-columns: 30px 1fr; gap: 4px 10px; }
+.conn .ic { font-size: 20px; }
+.conn .top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.conn .st { font-size: 11px; border-radius: 999px; padding: 1px 8px; background: var(--surface-2); color: var(--muted); white-space: nowrap; }
+.conn .st.proposed { background: var(--warn-soft); color: var(--warn); }
+.conn .prov { font-size: 12px; color: var(--muted); }
+.conn .does { grid-column: 2; font-size: 13px; color: var(--muted); }
+.conn .auto { grid-column: 2; display: flex; flex-wrap: wrap; gap: 4px; }
+.conn .auto span { font-size: 11px; border: 1px solid var(--line); border-radius: 999px; padding: 1px 7px; color: var(--muted); }
+.conn .btn { grid-column: 2; justify-self: start; padding: 6px 12px; font-size: 13px; margin-top: 4px; }
 .agents .hint { font-size: 12px; color: var(--muted); margin: 4px 0 8px; }
 .agent { border-top: 1px solid var(--line); padding: 10px 0 4px; }
 .agent-head { display: flex; align-items: center; gap: 6px; }
@@ -152,6 +167,10 @@ body.live .demo-only { display: none !important; }
 .linkbtn { border: 0; background: none; padding: 0; color: var(--accent); font-size: 13px; font-weight: 600; }
 .hero .why { grid-column: 2 / -1; font-size: 14px; color: var(--muted); margin-top: 10px; padding-top: 10px; border-top: 1px solid color-mix(in srgb, var(--accent) 18%, transparent); }
 @media (max-width: 860px) { .hero { grid-template-columns: 44px 1fr; } .hero .actions { grid-column: 1 / -1; } }
+.late-tag { font-size: 12px; font-weight: 600; color: var(--warn); background: var(--warn-soft); border-radius: 999px; padding: 2px 8px; vertical-align: 4px; }
+.hero .pair { grid-column: 2 / -1; display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 12px;
+  padding-top: 12px; border-top: 1px solid color-mix(in srgb, var(--accent) 18%, transparent); font-size: 14px; }
+.hero .pair .btn { padding: 7px 12px; font-size: 13px; white-space: nowrap; }
 .calm { background: var(--surface); border-radius: 20px; padding: 20px 24px; box-shadow: var(--shadow); }
 .calm .title { font-size: 18px; font-weight: 600; }
 .calm .sub { color: var(--muted); font-size: 14px; margin-top: 2px; }
@@ -165,12 +184,22 @@ body.live .demo-only { display: none !important; }
 .row.past .name { font-size: 14px; }
 .row.past.bad { opacity: .8; }
 .row.past.bad .meta { color: var(--bad); }
+.row.past.late { opacity: .8; }
+.row.past.late .meta { color: var(--warn); }
+.row.past.skip .name, .row.past.skip .meta { color: var(--faint); }
+.mark.half { background: var(--warn-soft); color: var(--warn); font-weight: 700; }
+.mark.skip { background: var(--surface-2); color: var(--faint); }
+.row.past.child { padding-left: 24px; }
+.late-start { width: 100%; border: 0; border-top: 1px solid var(--line); background: none; display: grid; grid-template-columns: 64px 30px 1fr auto;
+  gap: 10px; align-items: center; min-height: 46px; text-align: left; padding: 0; color: var(--warn); font-size: 14px; font-weight: 600; }
+.late-start .meta { font-weight: 500; color: var(--muted); font-size: 13px; }
 .row.current { background: var(--accent-soft); margin: 0 -18px; padding: 0 18px; border-top-color: transparent; }
 .row.current::before { content: ""; position: absolute; left: 0; top: 8px; bottom: 8px; width: 3px; border-radius: 0 3px 3px 0; background: var(--accent); }
 .row.current .name { font-weight: 600; }
 .row.current .meta { color: var(--accent); font-weight: 600; }
 .row.current.focus { background: color-mix(in srgb, var(--accent) 22%, var(--surface)); }
 .row.current.limit { background: var(--warn-soft); }
+.row.current.late .meta { color: var(--warn); }
 .row.current.limit::before { background: var(--warn); }
 .row.current.limit .name { color: var(--ink); }
 .row.current.limit .meta { color: var(--warn); }
@@ -305,9 +334,15 @@ body.live .demo-only { display: none !important; }
 <div class="layout">
   <aside class="left">
     <section class="agents">
-      <h3>Agents</h3>
-      <p class="hint">Each agent manages its goals. Switch an agent off to pause all its goals, or switch off a single goal.</p>
-      <div id="agents"></div>
+      <nav class="ltabs" id="ltabs"><button data-ltab="agents" class="on">Agents</button><button data-ltab="connectors">Connectors</button></nav>
+      <div id="lpane-agents">
+        <p class="hint">Each agent manages its topics and goals. Switch an agent off to pause all its goals, or switch off a single goal.</p>
+        <div id="agents"></div>
+      </div>
+      <div id="lpane-connectors" hidden>
+        <p class="hint">Where the agents get data and where they act. Not connected yet — coming next.</p>
+        <div id="connectors"></div>
+      </div>
     </section>
     <section data-demo class="activity">
       <h3>Agent activity</h3>
@@ -353,21 +388,21 @@ async function post(op, body) {
 }
 const ICONS = { wake: "⏰", sunlight: "☀️", bright_light: "💡", screen_bright: "📱", caffeine: "☕",
   exercise_light: "🚶", exercise_intense: "🏋️", wind_down: "🧘", meal: "🍽️", snack: "🍪", sleep: "🌙",
-  surf: "🏄", padel: "🎾", dev_work: "💻", marketing_work: "📣" };
+  surf: "🏄", padel: "🎾", dev_work: "💻", marketing_work: "📣", water: "💧", vegetables: "🥗", protein_meal: "🥚" };
 const SHORT = { caffeine: "Coffee", meal: "Meal", snack: "Snack", sunlight: "Daylight", exercise_light: "Walk",
   exercise_intense: "Workout", surf: "Surf", padel: "Padel", dev_work: "Development", marketing_work: "Marketing",
-  screen_bright: "Screens", wind_down: "Wind down" };
+  water: "Water", vegetables: "Vegetables", protein_meal: "Protein", screen_bright: "Screens", wind_down: "Wind down" };
 const DAY_SHORT = { mon: "Mon", tue: "Tue", wed: "Wed", thu: "Thu", fri: "Fri", sat: "Sat", sun: "Sun" };
 const DONE_LABEL = { wake: "I'm up", sleep: "Going to bed", meal: "Eating now" };
-const PROACTIVE = new Set(["nudge", "last_call", "brief", "recap"]);
-const STATUS_WORD = { done: ["Done", "good"], clean: ["Kept", "good"], missed: ["Missed", "bad"], violated: ["Broken", "bad"],
+const PROACTIVE = new Set(["nudge", "last_call", "brief", "recap", "recovery"]);
+const STATUS_WORD = { done: ["Done", "good"], clean: ["Kept", "good"], missed: ["Missed", "bad"], violated: ["Broken", "bad"], late: ["Late", "late"],
   pending: ["Open", ""], waiting: ["After waking", ""] };
 const $ = (id) => document.getElementById(id);
 const dayMin = (hhmm) => { const [h, m] = hhmm.split(":").map(Number); return (h * 60 + m - 240 + 1440) % 1440; };  // day starts 04:00
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
 let S = null, tab = "assistant", playing = false, inflight = false, acc = 0, unread = false;
-let showAllEarlier = false, openWhy = null, toastTimer = null, editing = null, tomorrowOpen = false;
+let showAllEarlier = false, openWhy = null, toastTimer = null, editing = null, tomorrowOpen = false, lateOpen = false, ltab = "agents";
 const openAgents = new Set();  // agents whose goal list is unfolded
 
 
@@ -394,7 +429,7 @@ const isAlert = (m) => m.kind === "feedback" && ["violated", "missed"].includes(
 function route(messages, origin) {
   for (const m of messages) {
     logActivity(m);
-    const toChat = ["brief", "recap", "reply", "user"].includes(m.kind) || isAlert(m) || (origin === "say" && m.kind === "feedback");
+    const toChat = ["brief", "recap", "recovery", "reply", "user"].includes(m.kind) || isAlert(m) || (origin === "say" && m.kind === "feedback");
     if (toChat) addChat(m);
     if (PROACTIVE.has(m.kind) || isAlert(m)) showToast(m);
   }
@@ -403,12 +438,12 @@ function route(messages, origin) {
 function logActivity(m) {
   const entry = {
     nudge: ["🔔", "Reminder sent"], last_call: ["⏳", "Last call sent"], brief: ["☀️", "Morning brief sent"],
-    recap: ["🌙", "Day recap sent"], sensor: ["📡", "Sensor"], owner: ["👤", "Owner"],
+    recap: ["🌙", "Day recap sent"], recovery: ["🧭", "Recovery plan sent"], sensor: ["📡", "Sensor"], owner: ["👤", "Owner"],
   }[m.kind === "sensor" && m.text.startsWith("👤") ? "owner" : m.kind] || (m.kind === "feedback" ? (isAlert(m) ? ["⚠️", "Flagged"] : ["✓", "Marked done"]) : null);
   if (!entry) return;
   const detail = m.kind === "sensor" ? m.text.replace(/^(📡|👤)\s*/, "")
     : m.kind === "feedback" ? m.text.split(" — ")[0].split(". Why")[0].replace(/^[^\w]+/, "") : m.text.split("\n")[0];
-  const rule = m.rule_id && !["brief", "recap"].includes(m.rule_id) ? `rule: ${m.contract_id}.${m.rule_id}` : "";
+  const rule = m.rule_id && !["brief", "recap", "recovery"].includes(m.rule_id) ? `rule: ${m.contract_id}.${m.rule_id}` : "";
   const feed = $("feed");
   feed.querySelector(".empty")?.remove();
   feed.insertAdjacentHTML("afterbegin", `<li><span class="t num">${m.at}</span><span>${entry[0]}</span>
@@ -430,7 +465,9 @@ function addChat(m) {
 
 function showToast(m) {
   $("toast-body").textContent = m.kind === "brief" ? "Good morning — your brief is in the Assistant." :
-    m.kind === "recap" ? "Your day is closed — recap is in the Assistant." : m.text.split(". Why it matters")[0];
+    m.kind === "recap" ? "Your day is closed — recap is in the Assistant." :
+    m.kind === "recovery" ? m.text.split("\n")[0].replace(" The plan:", " Your recovery plan is in the Assistant.") :
+    m.text.split(". Why it matters")[0];
   $("toast-time").textContent = m.at;
   $("toast").classList.add("show");
   clearTimeout(toastTimer);
@@ -444,7 +481,7 @@ function render() {
   if (!$("scenario").options.length) $("scenario").innerHTML = S.scenarios.map((sc) =>
     `<option value="${sc.id}" title="${esc(sc.description)}">User scenario: ${esc(sc.label)}</option>`).join("");
   $("scenario").value = S.scenario;
-  renderAgents(); renderToday(); renderInsights(); renderChrome();
+  renderAgents(); renderConnectors(); renderToday(); renderInsights(); renderChrome();
 }
 
 function toggle(label, on, attrs, small = false, disabled = false) {
@@ -464,9 +501,7 @@ function renderAgents() {
           <span class="dom">${a.domain.toLowerCase() === a.name.toLowerCase() ? "" : `${esc(a.domain[0].toUpperCase() + a.domain.slice(1))} · `}${on}/${a.goals.length} goals${score}</span></span></button>
         <button class="gear" data-setup="${a.id}" title="Set up ${esc(a.name)} (coming soon)" aria-label="Set up ${esc(a.name)}">⚙︎</button>
         ${toggle(a.name, a.enabled, `data-agent="${a.id}"`)}</div>
-      <ul class="goals" ${open ? "" : "hidden"}>${a.goals.map((g) => `<li class="${g.enabled ? "" : "off"}">
-        <span>${ICONS[g.action] || "•"} ${esc(g.label)}${g.days.length ? ` <em class="days">${g.days.map((d) => DAY_SHORT[d]).join(" · ")}</em>` : ""}</span>
-        ${toggle(g.label, g.enabled, `data-agent="${a.id}" data-goal="${g.id}"`, true, !a.enabled)}</li>`).join("")}</ul>
+      <ul class="goals" ${open ? "" : "hidden"}>${goalList(a)}</ul>
     </div>`;
   }).join("");
   $("agents").querySelectorAll("[data-fold]").forEach((b) => (b.onclick = () => {
@@ -483,6 +518,30 @@ function renderAgents() {
     const name = goal ? S.agents.find((a) => a.id === agent).goals.find((g) => g.id === goal).label : S.agents.find((a) => a.id === agent).name;
     logControl(`${goal ? "Goal" : "Agent"} ${input.checked ? "switched on" : "switched off"}`, name);
     api("toggle", { contract_id: agent, rule_id: goal || null, on: input.checked });
+  }));
+}
+
+function goalList(a) {
+  let topic = null;
+  return a.goals.map((g) => {
+    const head = g.topic && g.topic !== topic ? `<li class="topic">${esc(g.topic)}</li>` : "";
+    topic = g.topic || topic;
+    return `${head}<li class="${g.enabled ? "" : "off"}">
+      <span>${ICONS[g.action] || "•"} ${esc(g.label)}${g.days.length ? ` <em class="days">${g.days.map((d) => DAY_SHORT[d]).join(" · ")}</em>` : ""}</span>
+      ${toggle(g.label, g.enabled, `data-agent="${a.id}" data-goal="${g.id}"`, true, !a.enabled)}</li>`;
+  }).join("");
+}
+
+function renderConnectors() {
+  $("connectors").innerHTML = S.connectors.map((c) => `<div class="conn"><span class="ic">${c.icon}</span>
+    <div><div class="top"><b>${esc(c.name)}</b><span class="st ${c.status === "proposed" ? "proposed" : ""}">${esc(c.status)}</span></div>
+      <div class="prov">${esc(c.providers)}</div></div>
+    <div class="does">${esc(c.does)}</div>
+    ${c.automates.length ? `<div class="auto">${c.automates.map((g) => `<span>${esc(g)}</span>`).join("")}</div>` : ""}
+    <button class="btn secondary" data-connect="${c.id}">Connect</button></div>`).join("");
+  $("connectors").querySelectorAll("[data-connect]").forEach((b) => (b.onclick = () => {
+    const c = S.connectors.find((x) => x.id === b.dataset.connect);
+    showToast({ kind: "info", at: S.clock, text: `${c.name} connector is coming soon.` });
   }));
 }
 
@@ -517,13 +576,16 @@ function nowSection(now, later) {
   const h = now.hero, urgent = h.minutes_left <= 15, whyOpen = openWhy === h.rule_id;
   return `<div class="hero">
       <div class="emoji">${ICONS[h.action] || "•"}</div>
-      <div><div class="title">${esc(h.title)}</div><div class="advice">${esc(h.advice)}</div></div>
+      <div><div class="title">${esc(h.title)}${h.late ? ` <span class="late-tag">late · still worth it</span>` : ""}</div>
+        <div class="advice">${esc(h.advice)}</div></div>
       <div class="actions"><button class="btn primary" data-reply="done">${DONE_LABEL[h.action] || "Done"}</button>
         <button class="btn secondary" data-reply="snooze">Later</button></div>
       <div class="meter"><div class="bar ${urgent ? "urgent" : ""}"><div style="width:${Math.round(h.progress * 100)}%"></div></div>
         <div class="foot"><span class="left ${urgent ? "urgent" : ""}">${h.minutes_left} min left</span>
           <button class="linkbtn" id="why">${whyOpen ? "Hide" : "Why it matters"}</button></div></div>
       ${whyOpen ? `<div class="why">${esc(ruleInfo(h.rule_id)?.why)}</div>` : ""}
+      ${h.pair ? `<div class="pair"><span>🔗 ${esc(h.pair.text)}</span>
+        <button class="btn secondary" id="done-both">Done both</button></div>` : ""}
     </div>${chips}`;
 }
 
@@ -531,13 +593,14 @@ const PAST_VISIBLE = 2;  // most recent past items stay unfolded
 
 function timelineSection(t) {
   const current = [...(t.now.hero ? [t.now.hero] : []), ...t.now.also, ...t.now.avoid];
-  const past = t.earlier;
+  const ls = t.late_start;
+  const past = ls ? t.earlier.filter((i) => i.cause !== "late_start") : t.earlier;
   const keepOpen = past.findIndex((i) => i.rule_id === editing);
   const foldCount = showAllEarlier ? 0 : Math.max(0, past.length - PAST_VISIBLE);
   const folded = past.slice(0, keepOpen >= 0 ? Math.min(foldCount, keepOpen) : foldCount);
   const rows = [];
   if (folded.length) rows.push(foldRow(folded));
-  rows.push(...past.slice(folded.length).map(pastRow));
+  rows.push(...past.slice(folded.length).flatMap((i) => i.root && ls ? lateStartRows(i, ls, t.earlier) : [pastRow(i)]));
   rows.push(`<div class="nowline" title="Now"></div>`);
   rows.push(...current.map((c) => currentRow(c, c === t.now.hero)));
   rows.push(...t.later.map(futureRow));
@@ -565,12 +628,22 @@ function foldRow(items) {
     <span>${items.length} earlier · ${items.length - missed} done${missed ? `, ${missed} missed` : ""}</span><span>Show</span></button>`;
 }
 
-function pastRow(i) {
-  const bad = i.tone === "bad", open = editing === i.rule_id;
+const MARKS = { good: ["ok", "✓"], bad: ["no", "✕"], late: ["half", "◐"], skip: ["skip", "–"] };
+
+function pastRow(i, extra = "") {
+  const open = editing === i.rule_id, [markCls, mark] = MARKS[i.tone] || MARKS.good;
   const meta = i.outcome === i.at ? "Done" : i.outcome;
-  return `<div class="row past ${bad ? "bad" : ""} ${open ? "editing" : ""}" data-edit="${i.rule_id}" title="Click to edit">
-    ${timeCell(i.at, i)}<span class="mark ${bad ? "no" : "ok"}">${bad ? "✕" : "✓"}</span>${nameCell(i)}
+  return `<div class="row past ${i.tone} ${extra} ${open ? "editing" : ""}" data-edit="${i.rule_id}" title="Click to edit">
+    ${timeCell(i.at, i)}<span class="mark ${markCls}">${mark}</span>${nameCell(i)}
     <span class="meta">${esc(meta)}</span></div>${open ? editorHtml(i) : ""}`;
+}
+
+function lateStartRows(root, ls, earlier) {
+  const caused = earlier.filter((i) => i.cause === "late_start");
+  const head = `<button class="late-start" id="late-start"><span class="t num">${ls.wake_at}</span><span class="mark half">⏰</span>
+    <span class="name"><span>Late start · +${ls.delay_min} min</span></span>
+    <span class="meta">${caused.length ? `${caused.length} knock-on · ${lateOpen ? "hide" : "show"}` : `usual ${ls.usual}`}</span></button>`;
+  return [head, pastRow(root, "child"), ...(lateOpen ? caused.map((i) => pastRow(i, "child")) : [])];
 }
 
 function editorHtml(i) {
@@ -595,9 +668,9 @@ function currentRow(c, isFocus) {
     return `<div class="row current limit">${timeCell("now", c, "soft")}<span class="mark limit">${ICONS[c.action] || ""}</span>
       ${nameCell(c)}<span class="meta">until ${c.until}</span></div>`;
   }
-  return `<div class="row current ${isFocus ? "focus" : ""}">${timeCell(`by ${c.by}`, c, "soft")}
+  return `<div class="row current ${isFocus ? "focus" : ""} ${c.late ? "late" : ""}">${timeCell(`by ${c.by}`, c, "soft")}
     <button class="mark todo" data-log="${c.action}" title="Mark done">${ICONS[c.action] || ""}</button>
-    ${nameCell(c)}<span class="meta">${c.minutes_left} min left</span></div>`;
+    ${nameCell(c)}<span class="meta">${c.late ? "late · " : ""}${c.minutes_left} min left</span></div>`;
 }
 
 function futureRow(i) {
@@ -626,6 +699,12 @@ function bindToday() {
     const h = S.today.now.hero; api("reply", { op: b.dataset.reply, contract_id: h.contract_id, rule_id: h.rule_id });
   }));
   v.querySelectorAll("[data-log]").forEach((b) => b.addEventListener("click", () => api("log", { action: b.dataset.log })));
+  v.querySelector("#done-both")?.addEventListener("click", async () => {
+    const h = S.today.now.hero, partner = h.pair;
+    await api("reply", { op: "done", contract_id: h.contract_id, rule_id: h.rule_id });
+    await api("log", { action: partner.action });
+  });
+  v.querySelector("#late-start")?.addEventListener("click", () => { lateOpen = !lateOpen; renderToday(); });
   v.querySelector("#tomorrow")?.addEventListener("click", () => { tomorrowOpen = !tomorrowOpen; renderToday(); });
   v.querySelectorAll("[data-edit]").forEach((row) => row.addEventListener("click", () => {
     editing = editing === row.dataset.edit ? null : row.dataset.edit;
@@ -681,6 +760,9 @@ function renderInsights() {
 }
 
 function renderChrome() {
+  $("ltabs").querySelectorAll("button").forEach((b) => b.classList.toggle("on", b.dataset.ltab === ltab));
+  $("lpane-agents").hidden = ltab !== "agents";
+  $("lpane-connectors").hidden = ltab !== "connectors";
   $("tabs").querySelectorAll("button").forEach((b) => {
     b.classList.toggle("on", b.dataset.tab === tab);
     b.querySelector(".dot")?.remove();
@@ -694,6 +776,7 @@ function setTab(t) { tab = t; if (t === "assistant") unread = false; renderChrom
 
 // ---------- static UI ----------
 $("tabs").querySelectorAll("button").forEach((b) => (b.onclick = () => setTab(b.dataset.tab)));
+$("ltabs").querySelectorAll("button").forEach((b) => (b.onclick = () => { ltab = b.dataset.ltab; renderChrome(); }));
 $("scenario").onchange = () => restart();
 $("toast").onclick = () => $("toast").classList.remove("show");
 $("menu").innerHTML = Object.entries(SHORT).map(([a, label]) => `<button data-a="${a}">${ICONS[a]} ${label}</button>`).join("");
@@ -728,7 +811,7 @@ function clearPanels() {
 }
 
 async function restart() {
-  setPlaying(false); showAllEarlier = false; openWhy = null; editing = null; tomorrowOpen = false; unread = false;
+  setPlaying(false); showAllEarlier = false; openWhy = null; editing = null; tomorrowOpen = false; unread = false; lateOpen = false;
   clearPanels();
   await api("reset", { scenario: $("scenario").value || null });
   const sc = S.scenarios.find((x) => x.id === S.scenario);

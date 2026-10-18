@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from .model import Contract, Nudge, Phase, Rule, RuleKind, Window
+from .model import Contract, Nudge, Pair, Phase, Rule, RuleKind, Window
 
 CONTRACTS_DIR = Path(__file__).parent / "contracts"
 ACTIONS_FILE = Path(__file__).parent / "actions.json"
@@ -28,6 +28,9 @@ def load_contracts(directory: Path = CONTRACTS_DIR, actions: dict[str, str] | No
     duplicates = {i for i in rule_ids if rule_ids.count(i) > 1}
     if duplicates:  # events can be tied to a goal by rule id, so ids must be unique across contracts
         raise ContractError(f"rule ids must be unique across contracts: {sorted(duplicates)}")
+    dangling = [f"{r.id} -> {p.with_rule}" for c in contracts for r in c.rules for p in r.pairs if p.with_rule not in rule_ids]
+    if dangling:
+        raise ContractError(f"pairs point to unknown goals: {dangling}")
     return contracts
 
 
@@ -70,6 +73,10 @@ def _rule(raw: dict) -> Rule:
         duration=raw.get("duration"),
         reopens=raw.get("reopens"),
         days=tuple(raw.get("days", ())),
+        topic=raw.get("topic", ""),
+        pairs=tuple(Pair(p["with"], p["text"]) for p in raw.get("pairs", ())),
+        late_credit=float(raw.get("late_credit", 0.5)),
+        remind=bool(raw.get("remind", True)),
     )
 
 

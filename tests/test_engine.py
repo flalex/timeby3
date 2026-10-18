@@ -56,22 +56,22 @@ def test_pending_rules_do_not_affect_score():
 def test_regularity_scores_fraction_of_days_on_time():
     events = [("meal", at("12:30", DAY - timedelta(days=i))) for i in (1, 2, 3)]
     events.append(("meal", at("13:30", DAY - timedelta(days=4))))  # 60 min off
-    _, r = results("meal_regularity", events, at("10:00"))
+    _, r = results("nutrition", events, at("10:00"))
     lunch = r["regular_lunch"]
-    assert lunch.earned == pytest.approx(2 * 3 / 4)
+    assert lunch.earned == pytest.approx(2 * (3 + 0.5) / 4)  # the 60-min-late day earns half credit
     assert lunch.status is Status.PENDING
     assert lunch.detail.startswith("3/4 days")
 
 
 def test_skipped_meal_counts_as_irregular():
-    _, r = results("meal_regularity", [("meal", at("07:45"))], at("15:00"))
+    _, r = results("nutrition", [("meal", at("07:45"))], at("15:00"))
     assert r["regular_lunch"].status is Status.MISSED
     assert r["regular_lunch"].earned == 0
 
 
 def test_bedtime_after_midnight_belongs_to_previous_day():
     _, r = results("cortisol_rhythm", [("sleep", at("00:20", DAY + timedelta(days=1)))], at("01:00", DAY + timedelta(days=1)))
-    assert r["consistent_bedtime"].status is Status.MISSED  # 80 min late, judged for DAY
+    assert r["consistent_bedtime"].status is Status.LATE  # 80 min late, judged for DAY
 
 
 def test_nudge_sent_once_and_suppressed_when_already_done():
@@ -79,8 +79,8 @@ def test_nudge_sent_once_and_suppressed_when_already_done():
     a = Assistant(PROFILE, list(CONTRACTS.values()), ACTIONS, inbox)
     a.log("wake", at("07:00"))
     nudges = lambda now: [m.rule_id for m in a.tick(now) if m.kind == "nudge"]
-    assert nudges(at("07:10")) == ["morning_light"]
-    assert nudges(at("07:11")) == []
+    assert "morning_light" in nudges(at("07:10"))
+    assert "morning_light" not in nudges(at("07:11"))
     a.log("sunlight", at("07:05", DAY + timedelta(days=1)))
     assert "morning_light" not in nudges(at("07:15", DAY + timedelta(days=1)))
 
@@ -203,9 +203,9 @@ def test_waiting_off_by_default_keeps_v1_behavior():
 
 def test_brief_waits_for_observed_wake_when_enabled():
     a = Assistant(PROFILE, list(CONTRACTS.values()), ACTIONS, Inbox(), wait_for_observed=True)
-    assert ("brief", "brief") not in kinds(a.tick(at("07:30")))
-    a.log("wake", at("07:40"))
-    assert ("brief", "brief") in kinds(a.tick(at("07:41")))
+    assert ("brief", "brief") not in kinds(a.tick(at("06:55")))
+    a.log("wake", at("07:20"))  # within the 30-min tolerance: a normal brief
+    assert ("brief", "brief") in kinds(a.tick(at("07:21")))
 
 
 def today_of(a, now):
@@ -224,7 +224,9 @@ def test_today_places_items_earlier_now_later():
     assert t["now"]["hero"]["rule_id"] == "morning_light"            # soonest deadline first
     t = today_of(a, at("08:20"))
     missed = {i["rule_id"]: i["outcome"] for i in t["earlier"]}
-    assert missed["morning_light"] == "Missed" and missed["regular_breakfast"] == "Missed"
+    assert missed["morning_light"] == "Missed"
+    current = {i["rule_id"]: i for i in [t["now"]["hero"], *t["now"]["also"]] if i}
+    assert current["regular_breakfast"]["late"] and current["regular_breakfast"]["by"] == "09:15"  # late, still worth it
 
 
 def test_today_avoid_rules_show_as_active_limits_then_outcome():
@@ -248,12 +250,12 @@ def test_switching_off_a_goal_removes_its_reminder_and_scoring():
 
 def test_switching_off_an_agent_disables_all_its_goals_but_remembers_them():
     a = new_assistant()
-    a.set_enabled("meal_regularity", False, "regular_lunch")
-    a.set_enabled("meal_regularity", False)
-    assert "meal_regularity" not in [rep.contract.id for rep in a.status(at("12:00"))]
+    a.set_enabled("nutrition", False, "regular_lunch")
+    a.set_enabled("nutrition", False)
+    assert "nutrition" not in [rep.contract.id for rep in a.status(at("12:00"))]
     assert "regular_lunch" not in [m.rule_id for m in a.tick(at("12:15"))]  # lunch nudge silenced
-    a.set_enabled("meal_regularity", True)
-    meal = next(rep for rep in a.status(at("12:00")) if rep.contract.id == "meal_regularity")
+    a.set_enabled("nutrition", True)
+    meal = next(rep for rep in a.status(at("12:00")) if rep.contract.id == "nutrition")
     assert "regular_lunch" not in {r.rule.id for r in meal.results}  # goal-level choice kept
 
 
@@ -268,9 +270,9 @@ def result_of(a, rule_id, now):
 def test_correct_marks_missed_goal_done_and_back():
     a = v3_assistant()
     assert result_of(a, "regular_lunch", at("15:00")).status is Status.MISSED
-    a.correct("meal_regularity", "regular_lunch", True, at("12:40"), at("15:00"))
+    a.correct("nutrition", "regular_lunch", True, at("12:40"), at("15:00"))
     assert result_of(a, "regular_lunch", at("15:00")).status is Status.DONE
-    a.correct("meal_regularity", "regular_lunch", False, None, at("15:00"))
+    a.correct("nutrition", "regular_lunch", False, None, at("15:00"))
     assert result_of(a, "regular_lunch", at("15:00")).status is Status.MISSED
 
 
@@ -303,9 +305,10 @@ def test_v3_recap_waits_for_actual_lights_out():
 
 def test_correct_accepts_late_task_but_rejects_future_and_limit_outside_window():
     a = v3_assistant()
-    a.correct("meal_regularity", "regular_lunch", True, at("15:00"), at("15:30"))  # late lunch is still lunch
+    a.correct("nutrition", "regular_lunch", True, at("15:00"), at("15:30"))  # late lunch is still lunch
     lunch = result_of(a, "regular_lunch", at("15:30"))
-    assert lunch.status is Status.MISSED and lunch.hit_at == at("15:00")
+    assert lunch.status is Status.LATE and lunch.hit_at == at("15:00")
+    assert lunch.earned is not None and lunch.earned > 0
     a.log("wake", at("07:00"))
     with pytest.raises(ValueError, match="between"):
         a.correct("cortisol_rhythm", "morning_light", True, at("07:35"), at("07:30"))  # in the future
@@ -315,10 +318,10 @@ def test_correct_accepts_late_task_but_rejects_future_and_limit_outside_window()
 
 def test_late_breakfast_tied_to_goal_is_not_read_as_lunch_but_breaks_limits():
     a = v3_assistant()
-    a.correct("meal_regularity", "regular_breakfast", True, at("11:15"), at("11:30"))
+    a.correct("nutrition", "regular_breakfast", True, at("11:15"), at("11:30"))
     assert result_of(a, "regular_breakfast", at("11:30")).hit_at == at("11:15")
     assert result_of(a, "regular_lunch", at("11:30")).hit_at is None  # 11:15 is inside lunch's window
-    a.correct("meal_regularity", "regular_dinner", True, at("20:30"), at("21:00"))
+    a.correct("nutrition", "regular_dinner", True, at("20:30"), at("21:00"))
     assert result_of(a, "no_late_eating", at("21:00")).status is Status.VIOLATED
 
 
@@ -338,3 +341,40 @@ def test_weekday_goals_only_apply_on_their_days():
     ids = lambda day: {r.rule.id for rep in a.status(at("12:00", day)) for r in rep.results}
     assert "surfing" in ids(sunday) and "workout" not in ids(sunday)
     assert "workout" in ids(monday) and "surfing" not in ids(monday)
+
+
+def test_late_wake_gives_one_recovery_plan_and_no_reminders_while_asleep():
+    a = v3_assistant()
+    early = kinds(a.tick(at("07:00")) + a.tick(at("07:30")) + a.tick(at("08:00")))
+    assert early == [("nudge", "consistent_wake")]  # only the wake-up call; breakfast waits
+    a.log("wake", at("08:25"))
+    [plan] = [m for m in a.tick(at("08:25")) if m.kind == "recovery"]
+    assert "85 min after your usual 07:00" in plan.text and "Late but worth it: Breakfast" in plan.text
+    assert "Unchanged: Lunch 12:30" in plan.text
+    assert ("nudge", "regular_breakfast") not in kinds(a.tick(at("08:26")))  # covered by the plan
+
+
+def test_late_meal_close_to_next_meal_is_merged_not_pushed():
+    a = v3_assistant()
+    a.log("wake", at("10:00"))
+    plan_text = next(m.text for m in a.tick(at("10:00")) if m.kind == "recovery")
+    assert "Breakfast — window closed before you woke up" in plan_text
+    b = v3_assistant()
+    b.log("wake", at("09:10"))  # breakfast window open until 09:15, lunch at 12:30 is > 3 h away
+    assert "Late but worth it: Breakfast" in next(m.text for m in b.tick(at("09:10")) if m.kind == "recovery")
+    from dataclasses import replace
+    from timeby.model import Anchor
+    early_lunch = replace(PROFILE, anchors={**PROFILE.anchors, "lunch": Anchor(time(11, 30))})
+    c = Assistant(early_lunch, list(CONTRACTS.values()), ACTIONS, Inbox(), wait_for_observed=True)
+    c.log("wake", at("09:00"))  # breakfast still open, but lunch is only 2.5 h away -> merge into lunch
+    plan = next(m for m in c.tick(at("09:00")) if m.kind == "recovery")
+    assert "Breakfast — too close to lunch — merge into it" in plan.text
+    assert ("nudge", "regular_breakfast") not in kinds(c.tick(at("09:05")))
+
+
+def test_late_credit_is_partial():
+    a = v3_assistant()
+    a.log("meal", at("12:30", DAY - timedelta(days=1)))
+    a.log("meal", at("13:10"))  # 40 min late today
+    lunch = result_of(a, "regular_lunch", at("15:00"))
+    assert lunch.status is Status.LATE and lunch.earned == pytest.approx(2 * (1 + 0.5) / 2)

@@ -36,9 +36,10 @@ WEARABLE = "wearable"
 
 SCENARIOS = {s.id: s for s in (
     Scenario("model_day", "Model day", "Does everything on time and logs it.",
-             _s(("06:58", "wake", WEARABLE), ("07:10", "sunlight"), ("07:45", "meal"), ("08:00", "caffeine"),
-                ("08:20", "exercise_light"), ("09:05", "dev_work"), ("12:30", "meal"), ("13:35", "marketing_work"),
-                ("19:00", "meal"), ("22:00", "wind_down"),
+             _s(("06:58", "wake", WEARABLE), ("07:03", "water"), ("07:10", "sunlight"), ("07:45", "meal"),
+                ("07:46", "protein_meal"), ("08:00", "caffeine"), ("08:20", "exercise_light"), ("09:05", "dev_work"),
+                ("12:30", "meal"), ("12:31", "vegetables"), ("13:35", "marketing_work"), ("15:00", "water"),
+                ("19:00", "meal"), ("19:01", "vegetables"), ("22:00", "wind_down"),
                 ("22:58", "sleep", WEARABLE))),
     Scenario("skips_meals", "Skips breakfast, late lunch", "Coffee instead of breakfast, lunch at 13:40.",
              _s(("07:00", "wake", WEARABLE), ("07:30", "caffeine"), ("13:40", "meal"), ("19:10", "meal"),

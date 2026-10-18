@@ -9,7 +9,7 @@ scoring of situation/state) must be deterministic and grounded — never random,
 
 - Layer 1 contracts = scientific knowledge. v1 has exactly two:
   - `cortisol_rhythm` (hormones): high cortisol after waking, low before sleep.
-  - `meal_regularity` (nutrition): eat at consistent times.
+  - `nutrition`: topics Meal regularity, Hydration, Plants & fibre, Protein. Also `fitness`, `business` agents.
 - Architecture must allow unlimited contracts (dopamine, etc. come later).
 - This repo is the core module only. Later it connects to: a client (chat/app), data sources (auto events),
   and services (calendar, email) to apply recommendations.
@@ -38,6 +38,11 @@ scoring of situation/state) must be deterministic and grounded — never random,
 - Events the owner ties to a goal (`Event.goal` = rule id, set by `correct()`) count for that goal on that day even
   outside its window (late breakfast stays breakfast, shown "Late") and never for another task; limits still see them.
   Rule ids are unique across contracts. Rules may have `days` (mon..sun) — applies only on those weekdays.
+- Late start (Option D, `recovery.py`): when wake is observed > wake-goal tolerance late, the brief is replaced by ONE
+  recovery plan (now / moved with wake-up / late but worth it / skipped / unchanged + combine tips). While the owner
+  is still asleep only the wake-up call is sent. Late-but-done earns `late_credit` (default 0.5, status LATE).
+  Rules can declare `pairs` (goals to do together), `topic` (grouping), `remind: false` (companion goals).
+- `connectors.py`: declared connectors (calendar, fitness tracker, location) — UI only, not implemented.
 - Agents = contracts, goals = rules. `Assistant.set_enabled(contract_id, on, rule_id=None)` switches either off;
   `Assistant.active` (enabled agents with enabled goals only) is what status/tick/plan see, so off = fully silent.
 - `timeby/server.py` + `timeby/web/index.html` — interactive simulator: simulated clock, simulated sensors

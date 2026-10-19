@@ -41,7 +41,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .demobar .play { background: var(--demo-ink); color: var(--demo); border-color: var(--demo-ink); min-width: 84px; }
 .demobar label { display: flex; gap: 6px; align-items: center; color: var(--demo-muted); cursor: pointer; }
 .demobar .jump { display: flex; gap: 4px; }
-.demobar input[type=time] { background: transparent; color: var(--demo-ink); border: 1px solid var(--demo-line); border-radius: 8px; padding: 5px 8px; font: inherit; font-size: 13px; color-scheme: dark; }
+.demobar input.tm { width: 76px;  background: transparent; color: var(--demo-ink); border: 1px solid var(--demo-line); border-radius: 8px; padding: 5px 8px; font: inherit; font-size: 13px; color-scheme: dark; }
 .demobar .live-tag { color: #9fe0bd; border-color: #2f5a44; }
 body.live .demo-only { display: none !important; }
 
@@ -107,6 +107,9 @@ body.live .demo-only { display: none !important; }
 .insight .st.late { color: var(--warn); }
 .rule .dot.late { background: var(--warn); }
 .insight .hist, .insight .ev { margin-top: 6px; }
+.insight .pts { font-size: 12px; color: var(--muted); margin-top: 4px; }
+.insight .late-why { background: var(--warn-soft); color: var(--ink); border-radius: 8px; padding: 6px 8px; margin-bottom: 6px; }
+.editor .ed-note { margin: 0; font-size: 13px; color: var(--muted); background: var(--warn-soft); border-radius: 8px; padding: 8px 10px; }
 .insight .frac { font-weight: 600; font-variant-numeric: tabular-nums; color: var(--muted); margin-left: 4px; }
 .ai { margin: 8px 0 4px; display: grid; gap: 6px; }
 .ai .btn { justify-self: start; padding: 6px 12px; font-size: 13px; }
@@ -143,8 +146,13 @@ body.live .demo-only { display: none !important; }
 
 /* ---------- main header: Now + Log ---------- */
 .timeline-h { align-items: center; margin-top: 22px; }
-.timeline-h .btn { text-transform: none; letter-spacing: 0; padding: 6px 12px; font-size: 13px; }
-.head-actions { display: flex; gap: 10px; align-items: center; position: relative; }
+.log-wrap { position: relative; }
+.log-btn { display: inline-flex; align-items: center; gap: 8px; border: 0; border-radius: 10px; padding: 3px 14px 3px 3px; height: 36px;
+  background: var(--surface); color: var(--ink); box-shadow: var(--shadow); font-size: 14px; font-weight: 600; }
+.log-btn .plus { width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; background: var(--accent);
+  color: var(--accent-ink); font-size: 18px; font-weight: 500; line-height: 1; }
+.log-btn:hover .plus, .log-btn[aria-expanded="true"] .plus { filter: brightness(1.08); }
+.log-btn[aria-expanded="true"] { box-shadow: 0 0 0 2px var(--accent-soft), var(--shadow); }
 .btn { border: 0; border-radius: 10px; padding: 9px 16px; font-weight: 600; font-size: 14px; }
 .btn.primary { background: var(--accent); color: var(--accent-ink); }
 .btn.secondary { background: var(--surface); color: var(--ink); box-shadow: var(--shadow); }
@@ -274,6 +282,7 @@ body.live .demo-only { display: none !important; }
 .editor .fields { display: flex; flex-wrap: wrap; gap: 14px; font-size: 13px; color: var(--muted); align-items: center; }
 .editor input, .editor textarea { font: inherit; font-size: 14px; color: var(--ink); background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; }
 .editor input[type=number] { width: 72px; }
+input.tm { width: 76px; text-align: center; }
 .editor textarea { width: 100%; min-height: 54px; resize: vertical; }
 .editor .acts { display: flex; gap: 8px; }
 .ed-hint { font-size: 12px; color: var(--faint); }
@@ -315,9 +324,9 @@ body.live .demo-only { display: none !important; }
 @media (max-width: 860px) { .assistant { position: static; height: 70vh; } }
 .assistant.flash { box-shadow: 0 0 0 2px var(--accent), var(--shadow); }
 main { min-width: 0; }  /* let wide content (the week grid) scroll inside instead of widening the page */
-.viewbar { display: flex; justify-content: flex-start; margin: 0 0 14px; }
+.viewbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin: 0 0 14px; }
 .seg { display: inline-flex; background: var(--surface); border-radius: 10px; padding: 3px; box-shadow: var(--shadow); }
-.seg button { border: 0; background: none; padding: 6px 18px; border-radius: 8px; font-size: 14px; font-weight: 600; color: var(--muted); }
+.seg button { border: 0; background: none; height: 30px; padding: 0 18px; border-radius: 8px; font-size: 14px; font-weight: 600; color: var(--muted); }
 .seg button.on { background: var(--ink); color: var(--surface); }
 body.week .day-only { display: none !important; }
 .side-head { padding: 14px 16px 12px; border-bottom: 1px solid var(--line); display: grid; gap: 2px; }
@@ -373,7 +382,7 @@ body.week .day-only { display: none !important; }
   <button data-demo id="next" title="Fast-forward until the agent acts">⏭ Next agent action</button>
   <button data-demo id="reset" title="Restart the simulated day">↺ Reset</button>
   <form data-demo id="jump-form" class="jump" title="Move the clock to any time today (earlier time replays the day)">
-    <input type="time" id="jump" required><button>Jump to</button></form>
+    <input class="tm num" id="jump" required inputmode="numeric" autocomplete="off" placeholder="HH:MM" maxlength="8" aria-label="Time"><button>Jump to</button></form>
   <span class="spacer"></span>
   <label data-demo><input type="checkbox" id="pause" checked> Pause when the agent acts</label>
   <label data-demo><input type="checkbox" id="sensors" checked> Simulated sensors</label>
@@ -402,12 +411,11 @@ body.week .day-only { display: none !important; }
   <main id="main">
     <div class="notice" id="notice" hidden></div>
     <div class="viewbar"><div class="seg" id="viewseg" role="tablist" aria-label="View">
-      <button data-view="day" role="tab">Day</button><button data-view="week" role="tab">Week</button></div></div>
+      <button data-view="day" role="tab">Day</button><button data-view="week" role="tab">Week</button></div>
+      <div class="log-wrap"><button class="log-btn" id="log-btn" aria-haspopup="menu"><span class="plus" aria-hidden="true">+</span>Log activity</button>
+        <div class="menu" id="menu" role="menu" hidden></div></div></div>
     <section id="now-card" class="day-only"></section>
-    <div class="section-h timeline-h day-only"><span>Timeline</span>
-      <div class="head-actions"><span id="fold-slot"></span><button class="btn secondary" id="log-btn">+ Log</button>
-        <div class="menu" id="menu" hidden></div></div>
-    </div>
+    <div class="section-h timeline-h day-only"><span>Timeline</span><span id="fold-slot"></span></div>
     <section id="timeline" class="day-only"></section>
     <section id="week" hidden></section>
   </main>
@@ -428,6 +436,8 @@ body.week .day-only { display: none !important; }
 
 <script>
 const LIVE = location.pathname === "/live";
+/** Live pages pause syncing while an editor is open, so "now" comes from the real clock, not the last snapshot. */
+const currentClock = () => (LIVE ? new Date().toTimeString().slice(0, 5) : S.clock);
 const API = LIVE ? "/api/live" : "/api/v3";
 
 async function post(op, body) {
@@ -437,11 +447,11 @@ async function post(op, body) {
   return data;
 }
 const ICONS = { wake: "⏰", sunlight: "☀️", bright_light: "💡", screen_bright: "📱", caffeine: "☕",
-  exercise_light: "🚶", exercise_intense: "🏋️", wind_down: "🧘", meal: "🍽️", snack: "🍪", sleep: "🌙",
+  exercise_light: "🚶", exercise_intense: "🏋️", running: "🏃", wind_down: "🧘", meal: "🍽️", snack: "🍪", sleep: "🌙",
   surf: "🏄", padel: "🎾", dev_work: "💻", marketing_work: "📣", water: "💧", vegetables: "🥗", protein_meal: "🥚",
   work_start: "💼", work_end: "🏁", work_break: "🧍", work_after_hours: "📨" };
 const SHORT = { caffeine: "Coffee", meal: "Meal", snack: "Snack", sunlight: "Daylight", exercise_light: "Walk",
-  exercise_intense: "Workout", surf: "Surf", padel: "Padel", dev_work: "Development", marketing_work: "Marketing",
+  exercise_intense: "Workout", running: "Running", surf: "Surf", padel: "Padel", dev_work: "Development", marketing_work: "Marketing",
   water: "Water", vegetables: "Vegetables", protein_meal: "Protein", work_start: "Started work", work_break: "Work break",
   work_end: "Finished work", work_after_hours: "Work messages", screen_bright: "Screens", wind_down: "Wind down" };
 const DAY_SHORT = { mon: "Mon", tue: "Tue", wed: "Wed", thu: "Thu", fri: "Fri", sat: "Sat", sun: "Sun" };
@@ -450,6 +460,23 @@ const PROACTIVE = new Set(["nudge", "last_call", "brief", "recap", "recovery"]);
 const STATUS_WORD = { done: ["Done", "good"], clean: ["Kept", "good"], missed: ["Missed", "bad"], violated: ["Broken", "bad"], late: ["Late", "late"],
   pending: ["Open", ""], waiting: ["After waking", ""], untracked: ["No record", ""] };
 const $ = (id) => document.getElementById(id);
+/** One 24 h time field everywhere: native pickers follow the OS and may show "04:10 PM" next to the app's 16:03. */
+const timeField = (id, value, attrs = "") =>
+  `<input class="tm num" id="${id}" value="${value}" ${attrs} inputmode="numeric" autocomplete="off" spellcheck="false" placeholder="HH:MM" maxlength="8">`;
+/** "16:10", "1610", "9", "4:10 pm" → "HH:MM"; "" when it isn't a time of day. */
+function parseClock(text) {
+  const m = String(text ?? "").trim().toLowerCase().match(/^(\d{1,2})(?::?(\d{2}))?\s*(am|pm)?$/);
+  if (!m) return "";
+  let h = Number(m[1]);
+  const min = Number(m[2] || 0);
+  if (m[3]) {
+    if (h < 1 || h > 12) return "";
+    h = (h % 12) + (m[3] === "pm" ? 12 : 0);
+  }
+  return h > 23 || min > 59 ? "" : `${String(h).padStart(2, "0")}:${String(min).padStart(2, "0")}`;
+}
+const readTime = (id) => parseClock($(id)?.value);
+const TIME_HINT = "Type a time like 16:10.";
 const dayMin = (hhmm) => { const [h, m] = hhmm.split(":").map(Number); return (h * 60 + m - 240 + 1440) % 1440; };  // day starts 04:00
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
@@ -596,19 +623,29 @@ function agentInsight(a, report) {
   let topic = null;
   const rules = report.rules.map((r) => {
     const g = goals[r.id] || {}, [word, tone] = STATUS_WORD[r.status] || [r.status, ""];
+    const pts = r.earned == null ? "" : `<b class="frac" title="Points toward today's score">${fmtPts(r.earned)}/${r.weight}</b>`;
     const head = g.topic && g.topic !== topic ? `<div class="topic">${esc(g.topic)}</div>` : "";
     topic = g.topic || topic;
     return `${head}<details class="rule"><summary><span class="dot ${tone}"></span>
-        <span>${ICONS[g.action] || ""} ${esc(g.label || r.title)}</span><span class="st ${tone}">${word}</span></summary>
-      <div class="body">${esc(r.why)}${r.detail ? `<div class="hist">History: ${esc(r.detail)}</div>` : ""}
+        <span>${ICONS[g.action] || ""} ${esc(g.label || r.title)} ${pts}</span><span class="st ${tone}">${word}</span></summary>
+      <div class="body">${r.status === "late" ? `<div class="late-why">Late earns ${Math.round(r.late_credit * 100)}% of its ${r.weight} points — missed earns 0. ${esc(r.late_why)}</div>` : ""}${esc(r.why)}${r.detail ? `<div class="hist">History: ${esc(r.detail)}</div>` : ""}
         <div class="ev">Evidence <span class="etag">${r.strength}</span></div>
         <ul>${r.sources.map((src) => `<li>${esc(src)}</li>`).join("")}</ul></div></details>`;
   }).join("");
   return `<div class="score-block">${bigRing(report.score)}
-      <div><div class="phase">${esc(report.phase || "Today")}</div><div class="counts">${summary}</div></div></div>
+      <div><div class="phase">${esc(report.phase || "Today")}</div><div class="counts">${summary}</div>${pointsLine(report.points)}</div></div>
     <p class="agoal">${esc(a.goal)}</p>
     ${LIVE ? aiBlock(a) : ""}
     <div class="rules">${rules}</div>`;
+}
+
+const fmtPts = (n) => String(Math.round(n * 10) / 10);
+
+/** What the ring means: points earned of the points possible on goals judged so far. */
+function pointsLine(p) {
+  if (!p || !p.possible) return "";
+  const rest = p.unjudged ? ` · ${p.unjudged} not judged yet` : "";
+  return `<div class="pts" title="On time = full points, late = part, missed = 0. Goals with no record don't count.">${fmtPts(p.earned)} of ${p.possible} points${rest}</div>`;
 }
 
 const pct = (done, judged) => (judged ? Math.round((100 * done) / judged) : null);
@@ -619,7 +656,7 @@ function weeklyBadge(w) {
 }
 
 const WEEK_STATE = { met: ["met", "good"], on_track: ["on track", ""], at_risk: ["at risk", "late"], critical: ["critical", "bad"],
-  out_of_reach: ["out of reach", "bad"], none: ["not planned", ""] };
+  out_of_reach: ["out of reach", "bad"], skipped: ["skipped", ""], none: ["not planned", ""] };
 
 function weeklyInsight(a, w) {
   const summary = Object.entries(w.states).filter(([, n]) => n)
@@ -775,7 +812,7 @@ function recordRow(r) {
     ${timeCell(r.at, r)}<span class="mark rec">${ICONS[r.action] || "•"}</span>
     <span class="name"><span>${esc(r.title)}</span><span class="dur">your record</span></span><span class="meta">${esc(r.source)}</span></div>
     ${open ? `<div class="editor" id="rec-editor">
-      <div class="fields"><label>Time <input type="time" id="rec-at" value="${r.at}" max="${S.clock}"></label></div>
+      <div class="fields"><label>Time ${timeField("rec-at", r.at)}</label></div>
       <div class="ed-err" id="rec-err" hidden></div>
       <div class="acts"><button class="btn primary" id="rec-save">Save</button><button class="btn secondary" id="rec-delete">Delete</button>
         <button class="btn secondary" id="rec-cancel">Cancel</button></div></div>` : ""}`;
@@ -787,7 +824,7 @@ const planKey = (i) => `plan:${i.rule_id}`;
 function planEditor(i) {
   const moved = S.plan_changes?.[i.rule_id];
   return `<div class="editor" id="plan-editor" data-cid="${i.contract_id}" data-rid="${i.rule_id}">
-    <div class="fields"><label>Move to <input type="time" id="plan-at" value="${shownTime(i)}" min="${S.clock}"></label>
+    <div class="fields"><label>Move to ${timeField("plan-at", shownTime(i))}</label>
       <span class="ed-hint">today only — your usual plan stays the same</span></div>
     <div class="ed-err" id="plan-err" hidden></div>
     <div class="acts"><button class="btn primary" id="plan-move">Move</button><button class="btn secondary" id="plan-skip">Skip today</button>
@@ -833,7 +870,7 @@ function pastRow(i, extra = "") {
   const meta = i.outcome === i.at ? "Done" : i.outcome;
   return `<div class="row past ${i.tone} ${extra} ${open ? "editing" : ""}" data-edit="${i.rule_id}" title="Click to edit">
     ${timeCell(i.at, i)}<span class="mark ${markCls}">${mark}</span>${nameCell(i)}
-    <span class="meta">${esc(meta)}</span></div>${open ? editorHtml(i) : ""}`;
+    <span class="meta" ${i.late_note ? `title="${esc(i.late_note)}"` : ""}>${esc(meta)}</span></div>${open ? editorHtml(i) : ""}`;
 }
 
 let untrackedOpen = false;
@@ -861,10 +898,11 @@ function editorHtml(i) {
     <div class="seg2"><button data-h="1" class="${yes[1]} ${happened ? "on" : ""}">${yes[0]}</button>
       <button data-h="0" class="${no[1]} ${happened ? "" : "on"}">${no[0]}</button></div>
     <div class="fields">
-      <label>${avoid ? "When" : "Time"} <input type="time" id="ed-at" value="${i.edit.at}" min="${i.edit.min}" max="${i.edit.max}"></label>
+      <label>${avoid ? "When" : "Time"} ${timeField("ed-at", i.edit.at)}</label>
       ${avoid ? "" : `<label>Duration <input type="number" id="ed-dur" min="0" step="5" value="${i.duration ?? ""}"> min</label>`}
     </div>
-      <span class="ed-hint">allowed ${i.edit.min}–${i.edit.max}</span>
+      <span class="ed-hint">${avoid ? `between ${i.edit.min} and ${i.edit.until_now ? "now" : i.edit.max}` : "any time earlier today"}</span>
+    ${i.late_note ? `<p class="ed-note">${esc(i.late_note)}</p>` : ""}
     <textarea id="ed-cmt" placeholder="Add a comment">${esc(i.comment)}</textarea>
     <div class="ed-err" id="ed-err" hidden></div>
     <div class="acts"><button class="btn primary" id="ed-save">Save</button><button class="btn secondary" id="ed-cancel">Cancel</button></div>
@@ -933,6 +971,11 @@ function toggleEditor(key) {
 }
 
 /** Runs one change; on success re-renders, on refusal shows the reason inside the open editor. */
+function showError(errorBox, message) {
+  if ($(errorBox)) { $(errorBox).hidden = false; $(errorBox).textContent = message; }
+  else showToast({ kind: "info", at: S.clock, text: message });
+}
+
 async function applyChange(op, body, errorBox) {
   try {
     const data = await post(op, body);
@@ -941,8 +984,7 @@ async function applyChange(op, body, errorBox) {
     render();
     return true;
   } catch (err) {
-    if ($(errorBox)) { $(errorBox).hidden = false; $(errorBox).textContent = err.message; }
-    else showToast({ kind: "info", at: S.clock, text: err.message });
+    showError(errorBox, err.message);
     return false;
   }
 }
@@ -952,8 +994,11 @@ function bindRecordEditor() {
   const r = ownRecords().find((x) => recordKey(x) === editing);
   const record = { action: r.action, at: r.at };
   $("rec-cancel").onclick = () => toggleEditor(editing);
-  $("rec-save").onclick = async () => (await applyChange("record", { action: "move", record, to: $("rec-at").value }, "rec-err"))
-    && logControl("Record moved", `${r.title} → ${$("rec-at")?.value || ""}`);
+  $("rec-save").onclick = async () => {
+    const to = readTime("rec-at");
+    if (!to) return showError("rec-err", TIME_HINT);
+    if (await applyChange("record", { action: "move", record, to }, "rec-err")) logControl("Record moved", `${r.title} → ${to}`);
+  };
   $("rec-delete").onclick = async () => (await applyChange("record", { action: "delete", record }, "rec-err"))
     && logControl("Record deleted", `${r.title} ${r.at}`);
 }
@@ -967,7 +1012,10 @@ function bindPlanEditor() {
   if (!ed) return;
   const { cid, rid } = ed.dataset;
   $("plan-cancel").onclick = () => toggleEditor(editing);
-  $("plan-move").onclick = () => changePlan({ contract_id: cid, rule_id: rid, action: "move", at: $("plan-at").value });
+  $("plan-move").onclick = () => {
+    const at = readTime("plan-at");
+    return at ? changePlan({ contract_id: cid, rule_id: rid, action: "move", at }) : showError("plan-err", TIME_HINT);
+  };
   $("plan-skip").onclick = () => changePlan({ contract_id: cid, rule_id: rid, action: "skip" });
   if ($("plan-restore")) $("plan-restore").onclick = () => changePlan({ contract_id: cid, rule_id: rid, action: "restore" });
 }
@@ -987,6 +1035,15 @@ async function logNow(action, at = null) {
   }
 }
 
+/** Why a past item can't be set to this time, or "" when it can. The upper bound is the real "now" when it was now. */
+function timeProblem(at, edit) {
+  if (!at) return TIME_HINT;
+  const latest = edit.until_now ? currentClock() : edit.max;
+  if (dayMin(at) > dayMin(latest) && edit.until_now) return `${at} hasn't happened yet — it's ${latest} now.`;
+  if (dayMin(at) < dayMin(edit.min) || dayMin(at) > dayMin(latest)) return `Pick a time between ${edit.min} and ${latest}.`;
+  return "";
+}
+
 function bindEditor() {
   const ed = $("editor");
   if (!ed) return;
@@ -998,17 +1055,16 @@ function bindEditor() {
   };
   ed.querySelectorAll(".seg2 button").forEach((b) => (b.onclick = () => choose(b.dataset.h === "1")));
   $("ed-at").oninput = () => choose(true);  // picking a time means it happened then
-  const fail = (msg) => { $("ed-err").hidden = false; $("ed-err").textContent = msg; };
   $("ed-cancel").onclick = () => { editing = null; renderToday(); };
   $("ed-save").onclick = async () => {
-    const at = $("ed-at").value;
-    const inRange = at && dayMin(at) >= dayMin(item.edit.min) && dayMin(at) <= dayMin(item.edit.max);
-    if (happened && !inRange) return fail(`Pick a time between ${item.edit.min} and ${item.edit.max}.`);
+    const at = readTime("ed-at");
+    const problem = happened && timeProblem(at, item.edit);
+    if (problem) return showError("ed-err", problem);
     const body = { contract_id: item.contract_id, rule_id: item.rule_id, happened, at,
       duration: $("ed-dur")?.value || "", comment: $("ed-cmt").value };
     try {
       await post("edit", body);
-    } catch (err) { return fail(err.message); }
+    } catch (err) { return showError("ed-err", err.message); }
     editing = null;
     logControl("Edited by owner", `${item.title} · ${happened ? (item.kind === "avoid" ? `broken ${at}` : `done ${at}`) : (item.kind === "avoid" ? "kept" : "missed")}`);
     await api("state");
@@ -1037,16 +1093,17 @@ $("ltabs").querySelectorAll("button").forEach((b) => (b.onclick = () => { ltab =
 $("viewseg").querySelectorAll("button").forEach((b) => (b.onclick = () => setView(b.dataset.view)));
 $("scenario").onchange = () => restart();
 $("toast").onclick = () => $("toast").classList.remove("show");
-$("menu").innerHTML = `<label class="when">When <input type="time" id="log-at"></label>` +
+$("menu").innerHTML = `<label class="when">When ${timeField("log-at", "")}</label>` +
   Object.entries(SHORT).map(([a, label]) => `<button data-a="${a}">${ICONS[a]} ${label}</button>`).join("");
-$("log-btn").onclick = (e) => {
-  e.stopPropagation();
-  $("menu").hidden = !$("menu").hidden;
-  if (!$("menu").hidden) { $("log-at").value = S.clock; $("log-at").max = S.clock; }
-};
+function showLogMenu(open) {
+  $("menu").hidden = !open;
+  $("log-btn").setAttribute("aria-expanded", open);
+  if (open) $("log-at").value = currentClock();
+}
+$("log-btn").onclick = (e) => { e.stopPropagation(); showLogMenu($("menu").hidden); };
 $("menu").onclick = (e) => e.stopPropagation();  // picking a time must not close the menu
-document.addEventListener("click", () => ($("menu").hidden = true));
-$("menu").querySelectorAll("button").forEach((b) => (b.onclick = () => { $("menu").hidden = true; logNow(b.dataset.a, $("log-at").value); }));
+document.addEventListener("click", () => showLogMenu(false));
+$("menu").querySelectorAll("button").forEach((b) => (b.onclick = () => { showLogMenu(false); logNow(b.dataset.a, readTime("log-at") || currentClock()); }));
 $("suggest").innerHTML = ["What should I do now?", "How am I doing?", "Why?"].map((q) => `<button>${q}</button>`).join("");
 $("suggest").querySelectorAll("button").forEach((b) => (b.onclick = () => api("say", { text: b.textContent })));
 $("form").onsubmit = (e) => { e.preventDefault(); const t = $("text").value.trim(); if (t) { $("text").value = ""; api("say", { text: t }); } };
@@ -1085,7 +1142,8 @@ $("reset").onclick = restart;
 $("jump-form").onsubmit = async (e) => {
   e.preventDefault();
   setPlaying(false); editing = null;
-  const at = $("jump").value;
+  const at = readTime("jump");
+  if (!at) return showToast({ kind: "info", at: S.clock, text: TIME_HINT });
   if (dayMin(at) <= dayMin(S.clock)) clearPanels();  // going back replays the day
   await api("jump", { at });
   logControl("Clock moved", `to ${at}`);

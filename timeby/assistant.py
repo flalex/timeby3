@@ -33,7 +33,7 @@ class Assistant:
         self.profile = profile
         self.contracts = contracts  # all agents; switched-off ones are filtered out by `active`
         self.disabled_contracts: set[str] = set()
-        self.disabled_rules: set[tuple[str, str]] = set()
+        self.disabled_rules = {(c.id, r.id) for c in contracts for r in c.rules if r.off_by_default}
         self.day_overrides: dict[tuple[str, str], tuple[str, ...]] = {}  # owner's weekdays per goal
         self.notes: dict[tuple[date, str, str], dict] = {}  # owner's duration/comment per goal per day
         self.late_starts: dict[date, RecoveryPlan] = {}       # recovery plan of a day that started late
@@ -231,6 +231,8 @@ class Assistant:
         rule, day = result.rule, self.ctx.logical_day(now)
         earliest, latest = self.correctable_range(result, now)
         at = at or min(result.anchor_at, now)
+        if happened and at > now:
+            raise ValueError(f"{at:%H:%M} hasn't happened yet — it's {now:%H:%M} now")
         if happened and not earliest <= at <= latest:
             raise ValueError(f"time must be between {earliest:%H:%M} and {latest:%H:%M}")
         self.events = [e for e in self.events if not self._belongs(e, rule, result, day)]
@@ -250,13 +252,25 @@ class Assistant:
         moved = self.plan_changes.get((day, rule_id)) or 0
         self.plan_changes[(day, rule_id)] = moved + round((to - shown).total_seconds() / 60)
 
-    def skip_goal(self, contract_id: str, rule_id: str, now: datetime) -> None:
-        """Take an upcoming goal off today's plan: no reminder, no score."""
-        self._upcoming(contract_id, rule_id, now)
-        self.plan_changes[(self.ctx.logical_day(now), rule_id)] = None
+    def skip_goal(self, contract_id: str, rule_id: str, now: datetime, day: date | None = None) -> None:
+        """Take a goal off one day's plan — today (while still upcoming) or a day ahead: no reminder, no score."""
+        today = self.ctx.logical_day(now)
+        day = day or today
+        if day < today:
+            raise ValueError("that day is already over — edit its records instead")
+        if day == today:
+            self._upcoming(contract_id, rule_id, now)
+        elif not self._planned_weekday(contract_id, rule_id, day):
+            raise ValueError(f"'{rule_id}' isn't planned on {day:%A}")
+        self.plan_changes[(day, rule_id)] = None
 
-    def restore_goal(self, rule_id: str, now: datetime) -> None:
-        self.plan_changes.pop((self.ctx.logical_day(now), rule_id), None)
+    def _planned_weekday(self, contract_id: str, rule_id: str, day: date) -> bool:
+        """The goal is switched on and its weekdays include this day."""
+        rules = (r for c in self.active if c.id == contract_id for r in c.rules if r.id == rule_id)
+        return any(engine.applies(r, day) for r in rules)
+
+    def restore_goal(self, rule_id: str, now: datetime, day: date | None = None) -> None:
+        self.plan_changes.pop((day or self.ctx.logical_day(now), rule_id), None)
 
     def _upcoming(self, contract_id: str, rule_id: str, now: datetime) -> RuleResult:
         result, _ = self._lookup((contract_id, rule_id), now)

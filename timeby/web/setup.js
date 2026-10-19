@@ -13,7 +13,7 @@ dialog.su::backdrop { background: rgba(0,0,0,.35); }
 .su h3 { margin: 6px 0 0; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
 .su .su-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 14px; }
 .su .su-note { font-size: 12px; color: var(--faint); margin-top: -6px; }
-.su input[type=time] { font: inherit; font-size: 14px; color: var(--ink); background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; }
+.su input.tm { width: 76px; text-align: center;  font: inherit; font-size: 14px; color: var(--ink); background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; }
 .su textarea { font: inherit; font-size: 14px; color: var(--ink); background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; min-height: 70px; resize: vertical; }
 .su .su-topic { font-size: 11px; font-weight: 700; color: var(--faint); text-transform: uppercase; letter-spacing: .06em; padding-top: 6px; }
 .su .su-goal { display: grid; gap: 6px; padding: 8px 0; border-top: 1px solid var(--line); }
@@ -57,7 +57,7 @@ dialog.su::backdrop { background: rgba(0,0,0,.35); }
   function timesSection(agent) {
     if (!agent.anchors.length) return "";
     const rows = agent.anchors.map((t) => `<label class="su-row"><span>${esc(t.label)}</span>
-        <input type="time" name="${t.id}" value="${t.time}" required></label>
+        <input class="tm num" name="${t.id}" value="${t.time}" required inputmode="numeric" autocomplete="off" placeholder="HH:MM" maxlength="8"></label>
       ${t.shared.length ? `<div class="su-note">Also used by ${esc(t.shared.join(", "))}.</div>` : ""}`).join("");
     const warn = S.profile.warnings.map((w) => `<div class="su-msg warn">${esc(w)}</div>`).join("");
     return `<h3>Your times</h3>${rows}${warn}`;
@@ -109,9 +109,12 @@ dialog.su::backdrop { background: rgba(0,0,0,.35); }
   }
 
   function timeSteps(agent, form) {
-    const changed = agent.anchors.filter((t) => form.elements[t.id].value !== t.time);
+    const typed = (t) => parseClock(form.elements[t.id].value);
+    const bad = agent.anchors.find((t) => !typed(t));
+    if (bad) throw new Error(`${bad.label}: ${TIME_HINT}`);
+    const changed = agent.anchors.filter((t) => typed(t) !== t.time);
     if (!changed.length) return [];
-    const anchors = { ...S.profile.anchors, ...Object.fromEntries(changed.map((t) => [t.id, form.elements[t.id].value])) };
+    const anchors = { ...S.profile.anchors, ...Object.fromEntries(changed.map((t) => [t.id, typed(t)])) };
     return [["profile", { anchors }]];
   }
 

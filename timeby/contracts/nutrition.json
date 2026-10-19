@@ -47,6 +47,7 @@
       "weight": 2,
       "strength": "moderate",
       "why": "A regular meal pattern improves insulin sensitivity and thermogenesis compared with an irregular one; meal timing entrains peripheral body clocks.",
+      "late_why": "A late meal still fuels you, but irregular meal times blur the daily rhythm your metabolism runs on.",
       "advice": "Have breakfast at your usual time.",
       "sources": [
         "farshchi2005",
@@ -85,6 +86,7 @@
       "weight": 2,
       "strength": "moderate",
       "why": "Irregular meal timing is associated with worse cardiometabolic markers; regular timing lets the body anticipate food.",
+      "late_why": "A late meal still fuels you, but irregular meal times blur the daily rhythm your metabolism runs on.",
       "advice": "Block lunch at your usual time.",
       "sources": [
         "pot2016",
@@ -122,6 +124,7 @@
       "weight": 2,
       "strength": "moderate",
       "why": "Consistent meal times are part of the AHA recommendation for intentional meal timing.",
+      "late_why": "A late meal still fuels you, but irregular meal times blur the daily rhythm your metabolism runs on.",
       "advice": "Have dinner at your usual time.",
       "sources": [
         "stonge2017",

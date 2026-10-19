@@ -22,11 +22,11 @@ CONNECTORS = (
               group="Calendar"),
     Connector("fitness_tracker", "Fitness tracker", "⌚", "Apple Health · Garmin · Oura · Whoop",
               "Logs wake-up, sleep and workouts automatically, so nothing has to be ticked by hand.",
-              ("wake", "sleep", "exercise_light", "exercise_intense", "surf", "padel"), group="Health data"),
+              ("wake", "sleep", "exercise_light", "exercise_intense", "running", "surf", "padel"), group="Health data"),
     Connector("location", "Location", "📍", "Phone, opt-in · geofences stay on the device",
               "Knows when you are outdoors, at the gym, the padel club or the beach — logs daylight and sessions, "
               "and times nudges to where you are.",
-              ("sunlight", "exercise_intense", "padel", "surf"), status="proposed", group="Location"),
+              ("sunlight", "exercise_intense", "running", "padel", "surf"), status="proposed", group="Location"),
     Connector("telegram", "Telegram", "✈️", "Your own bot · set up in a minute with @BotFather",
               "Your assistant in your pocket: plans, warnings and the evening recap as Telegram messages.",
               group="Messenger"),

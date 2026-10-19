@@ -37,7 +37,14 @@ class LiveStore:
     def save(self, assistant: Assistant, day: date, extra: dict | None = None) -> None:
         """`extra`: settings that live outside the assistant (e.g. messenger channels)."""
         self._write(SETTINGS, self._settings(assistant) | (extra or {}))
-        self._write(f"{day.isoformat()}.json", self._day(assistant, day))
+        for d in [day, *self._days_ahead(assistant, day)]:
+            self._write(f"{d.isoformat()}.json", self._day(assistant, d))
+
+    def _days_ahead(self, a: Assistant, day: date) -> set[date]:
+        """Days after today the owner already changed (e.g. padel skipped while travelling), or changed before."""
+        changed = {d for d, _ in a.plan_changes if d > day}
+        saved = {date.fromisoformat(p.stem) for p in self.root.glob("????-??-??.json") if date.fromisoformat(p.stem) > day}
+        return changed | saved
 
     def _settings(self, a: Assistant) -> dict:
         return {

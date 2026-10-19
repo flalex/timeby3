@@ -7,7 +7,7 @@ from .calendar_ics import CalEvent, write
 from .model import ContractReport, RuleKind, RuleResult
 from .sleep_plan import SOURCES as WAKE_SOURCES, WakePlan
 
-ICONS = {"caffeine": "☕", "meal": "🍽️", "exercise_intense": "🏋️", "bright_light": "💡", "dev_work": "💻",
+ICONS = {"caffeine": "☕", "meal": "🍽️", "exercise_intense": "🏋️", "running": "🏃", "bright_light": "💡", "dev_work": "💻",
          "marketing_work": "📣", "sunlight": "☀️", "exercise_light": "🚶", "wind_down": "🧘", "surf": "🏄",
          "padel": "🎾", "water": "💧"}
 WAKE_EVENT = timedelta(minutes=15)

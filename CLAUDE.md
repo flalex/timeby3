@@ -60,10 +60,17 @@ scoring of situation/state) must be deterministic and grounded — never random,
 - Owner edits: every own record shows in the timeline (unless a goal row already shows it) and can be moved/deleted
   (`Assistant.move_record/delete_record`); + Log takes "when" (earlier today). Upcoming goals can be moved to another
   time or skipped for today only (`Assistant.move_goal/skip_goal/restore_goal` → `plan_changes`, saved per day).
+- Week view: click a planned day (today while upcoming, or ahead) to skip it or the rest of the week — e.g. travelling
+  (`Assistant.skip_goal/restore_goal(..., day)`; days ahead are saved in their own day file). Skipped days don't count
+  toward the target; a goal whose remaining days were skipped reads "Skipped", never a red verdict.
+- Late credit is explained, not hidden: rule `late_why` (what late still gives / misses), per-goal points in insights
+  (earned/weight) and "x of y points" under the score. Times in the UI are one 24 h text field (`timeField`/`parseClock`),
+  never native pickers (they follow the OS and may show AM/PM). Live editors check "now" against the real clock.
+- Rule `off_by_default` = opt-in goal (the 9–5 job topic): off until the owner switches it on in ⚙︎.
 - Claude API key: set in Assistant ⚙︎, stored by `keystore.py` in the macOS Keychain (else ~/.config/timeby, 0600),
   never in the project/data folder, only ever shown masked; `ai.use_key_source` reads it.
 - Business has topics "Own business" (development, marketing) and "Full-time job (9–5)" (start work, afternoon
-  break, finish on time, switch off after work; Mon–Fri) on profile anchors `work_start`/`work_end` (set in ⚙︎).
+  break, finish on time, switch off after work; Mon–Fri; opt-in) on profile anchors `work_start`/`work_end` (set in ⚙︎).
 - Agents = contracts, goals = rules. `Assistant.set_enabled(contract_id, on, rule_id=None)` switches either off;
   `Assistant.active` (enabled agents with enabled goals only) is what status/tick/plan see, so off = fully silent.
 - `timeby/server.py` + `timeby/web/index.html` — interactive simulator: simulated clock, simulated sensors

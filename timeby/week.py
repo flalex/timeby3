@@ -9,11 +9,12 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 
 from .assistant import Assistant
-from .engine import scheduled
+from .engine import applies, scheduled
 from .model import Contract, Rule, Status
 
 DONE, LATE, MISSED, OPEN, PLANNED = "done", "late", "missed", "open", "planned"
 UNTRACKED = "untracked"  # live: no record and nobody was watching yet — never counted
+SKIPPED = "skipped"      # the owner took it off that day (travel, illness): not planned, never counted
 CELL = {Status.DONE: DONE, Status.CLEAN: DONE, Status.LATE: LATE, Status.MISSED: MISSED, Status.VIOLATED: MISSED,
         Status.PENDING: OPEN, Status.WAITING: OPEN, Status.UNTRACKED: UNTRACKED}
 HABIT_SHARE = 5 / 7  # default target: most planned days — an occasional miss doesn't break a habit
@@ -32,7 +33,8 @@ def build_week(assistant: Assistant, now: datetime) -> dict:
     today = assistant.ctx.logical_day(now)
     days = [today - timedelta(days=today.weekday()) + timedelta(days=i) for i in range(7)]
     results = {day: _day_results(assistant, day, now, today) if day <= today else _day_plan(assistant, day) for day in days}
-    agents = [_agent(c, days, today, results) for c in assistant.active]
+    skips = {day: _skipped(assistant, day) for day in days}
+    agents = [_agent(c, days, today, results, skips) for c in assistant.active]
     return {
         "days": [{"date": d.isoformat(), "label": f"{d:%a}", "num": d.day, "today": d == today, "past": d < today}
                  for d in days],
@@ -61,18 +63,24 @@ def _day_plan(a: Assistant, day: date) -> dict[tuple[str, str], str]:
     return {(c.id, r.id): PLANNED for c in a.active for r in c.rules if scheduled(r, ctx, day)}
 
 
-def _agent(contract: Contract, days: list[date], today: date, results: dict) -> dict:
-    goals = [_goal(contract.id, rule, days, today, results) for rule in contract.rules]
+def _skipped(a: Assistant, day: date) -> set[tuple[str, str]]:
+    ctx = a.ctx
+    return {(c.id, r.id) for c in a.active for r in c.rules if applies(r, day) and ctx.skipped(r.id, day)}
+
+
+def _agent(contract: Contract, days: list[date], today: date, results: dict, skips: dict) -> dict:
+    goals = [_goal(contract.id, rule, days, today, results, skips) for rule in contract.rules]
     done, judged = sum(g["done"] for g in goals), sum(g["judged"] for g in goals)
     return {"id": contract.id, "name": contract.name, "done": done, "judged": judged,
-            "states": {s: sum(g["state"] == s for g in goals) for s in ("met", "on_track", "at_risk", "critical", "out_of_reach")},
+            "states": {s: sum(g["state"] == s for g in goals) for s in ("met", "on_track", "at_risk", "critical", "out_of_reach", "skipped")},
             "goals": goals}
 
 
-def _goal(contract_id: str, rule: Rule, days: list[date], today: date, results: dict) -> dict:
-    cells = [_cell(contract_id, rule, day, today, results) for day in days]
+def _goal(contract_id: str, rule: Rule, days: list[date], today: date, results: dict, skips: dict) -> dict:
+    cells = [SKIPPED if (contract_id, rule.id) in skips[day] else _cell(contract_id, rule, day, today, results)
+             for day in days]
     progress = _progress(rule, days, cells, today)
-    state, note = _verdict(progress, today)
+    state, note = _verdict(progress, today, skipped=SKIPPED in cells)
     return {"id": rule.id, "contract_id": contract_id, "label": rule.label, "topic": rule.topic, "action": rule.actions[0],
             "kind": rule.kind.value, "weight": rule.weight, "cells": cells, "done": progress.done, "judged": progress.judged,
             "target": progress.target, "planned": sum(c is not None for c in cells), "state": state, "note": note,
@@ -90,7 +98,7 @@ def _cell(contract_id: str, rule: Rule, day: date, today: date, results: dict) -
 
 
 def _progress(rule: Rule, days: list[date], cells: list[str | None], today: date) -> Progress:
-    planned = sum(c not in (None, UNTRACKED) for c in cells)  # untracked days don't count toward the target
+    planned = sum(c not in (None, UNTRACKED, SKIPPED) for c in cells)  # neither counts toward the target
     done = sum(c == DONE for c in cells)  # the week counts proper, on-time completions; late shows as ◐
     judged = done + sum(c in (LATE, MISSED) for c in cells)
     remaining = [d for d, c in zip(days, cells) if c in (OPEN, PLANNED)]
@@ -98,9 +106,11 @@ def _progress(rule: Rule, days: list[date], cells: list[str | None], today: date
     return Progress(done, judged, remaining, min(target, planned) if planned else 0)
 
 
-def _verdict(p: Progress, today: date) -> tuple[str, str]:
+def _verdict(p: Progress, today: date, skipped: bool = False) -> tuple[str, str]:
     """met / on_track / at_risk / critical / out_of_reach, with the reason in plain words."""
     need = p.target - p.done
+    if skipped and (not p.target or need > len(p.remaining)):  # the owner chose to sit it out: no red verdict
+        return "skipped", "You took the rest of this week off — back on the plan next week."
     if not p.target:
         return "none", "Not planned this week."
     if need <= 0:

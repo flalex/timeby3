@@ -311,7 +311,7 @@ def test_correct_accepts_late_task_but_rejects_future_and_limit_outside_window()
     assert lunch.status is Status.LATE and lunch.hit_at == at("15:00")
     assert lunch.earned is not None and lunch.earned > 0
     a.log("wake", at("07:00"))
-    with pytest.raises(ValueError, match="between"):
+    with pytest.raises(ValueError, match="07:35 hasn't happened yet — it's 07:30 now"):
         a.correct("cortisol_rhythm", "morning_light", True, at("07:35"), at("07:30"))  # in the future
     with pytest.raises(ValueError, match="between"):
         a.correct("cortisol_rhythm", "caffeine_cutoff", True, at("10:00"), at("18:00"))  # limit not active then
@@ -351,7 +351,7 @@ def test_late_wake_gives_one_recovery_plan_and_no_reminders_while_asleep():
     a.log("wake", at("08:25"))
     [plan] = [m for m in a.tick(at("08:25")) if m.kind == "recovery"]
     assert "85 min after your usual 07:00" in plan.text and "Late but worth it: Breakfast" in plan.text
-    assert "Unchanged: Start work 09:00 · Lunch 12:30" in plan.text
+    assert "Unchanged: Lunch 12:30" in plan.text
     assert ("nudge", "regular_breakfast") not in kinds(a.tick(at("08:26")))  # covered by the plan
 
 
@@ -970,8 +970,11 @@ def test_check_day_rejects_bad_working_days(changes, error):
     assert any(error in e for e in check_day(day_times(**changes), PROFILE.day_start).errors)
 
 
-def test_full_time_job_topic_runs_on_weekdays_with_its_own_hours():
+def test_full_time_job_topic_is_opt_in_and_runs_on_weekdays_with_its_own_hours():
     a = v3_assistant()
+    assert "start_work" not in {r.rule.id for r in result_of_all(a, at("08:00"))}  # opt-in: not everyone has a 9–5
+    for rid in ("start_work", "work_break", "finish_work", "switch_off"):
+        a.set_enabled("business", True, rid)
     goals = {r.rule.id: r for r in result_of_all(a, at("08:00"))}
     assert {"start_work", "work_break", "finish_work", "switch_off"} <= goals.keys()  # DAY is a Friday
     assert goals["start_work"].anchor_at == at("09:00") and goals["finish_work"].anchor_at == at("17:00")
@@ -992,3 +995,69 @@ def test_work_hours_are_set_in_the_business_agent_and_partial_updates_keep_the_r
 
 def result_of_all(a, now):
     return [r for rep in a.status(now) for r in rep.results]
+
+
+# --- running, skipping days ahead, what the score is made of ----------------------------------
+
+def test_running_is_its_own_activity_and_counts_as_morning_movement_not_strength():
+    from timeby.intents import parse
+    assert parse("went for a run").actions == ("running",)
+    a = v3_assistant()
+    a.log("wake", at("07:00"))
+    a.log("running", at("07:40"))
+    assert result_of(a, "morning_movement", at("08:00")).status is Status.DONE
+    assert result_of(a, "workout", at("23:00")).status is Status.MISSED  # a run isn't strength training
+
+
+def test_week_skips_padel_on_days_ahead_and_drops_it_from_the_target():
+    a = v3_assistant()
+    tue, thu = WED - timedelta(days=1), WED + timedelta(days=1)
+    now = at("10:00", WED)
+    with pytest.raises(ValueError, match="already over"):
+        a.skip_goal("fitness", "padel", now, tue)
+    with pytest.raises(ValueError, match="isn't planned"):
+        a.skip_goal("fitness", "padel", now, WED + timedelta(days=2))
+    a.skip_goal("fitness", "padel", now, thu)
+    _, goals = week_of(a, now)
+    padel = goals["padel"]
+    assert padel["cells"][3] == "skipped" and padel["planned"] == 2  # the row stays, so it can be put back
+    assert padel["state"] == "skipped" and "back on the plan" in padel["note"]  # travelling: no red verdict
+    a.restore_goal("padel", now, thu)
+    assert week_of(a, now)[1]["padel"]["cells"][3] == "planned"
+
+
+def test_skipping_every_remaining_day_reads_as_skipped_this_week():
+    a = v3_assistant()
+    now = at("10:00", WED)
+    for day in (WED, WED + timedelta(days=2)):
+        a.skip_goal("fitness", "workout", now, day)
+    a.log("exercise_intense", at("17:00", WED - timedelta(days=2)))  # Mon done
+    workout = week_of(a, now)[1]["workout"]
+    assert workout["cells"][2] == workout["cells"][4] == "skipped"
+    assert workout["target"] == 1 and workout["state"] == "met"
+
+
+def test_skips_ahead_are_saved_in_that_days_file_and_restored(tmp_path):
+    from timeby.server import handle
+    s = live_sim(tmp_path)
+    s.sync = lambda: []
+    monday = DAY + timedelta(days=(7 - DAY.weekday()))  # the next workout day after Friday DAY
+    handle(s, "plan", {"contract_id": "fitness", "rule_id": "workout", "action": "skip", "day": monday.isoformat()})
+    assert json.loads((tmp_path / f"{monday.isoformat()}.json").read_text())["plan_changes"] == {"workout": None}
+    assert live_sim(tmp_path).assistant.ctx.skipped("workout", monday)
+    handle(s, "plan", {"contract_id": "fitness", "rule_id": "workout", "action": "restore", "day": monday.isoformat()})
+    assert json.loads((tmp_path / f"{monday.isoformat()}.json").read_text())["plan_changes"] == {}
+
+
+def test_points_explain_the_score_and_late_beats_missed():
+    from timeby.server import _points
+    a = v3_assistant()
+    a.log("wake", at("07:00"))
+    a.correct("cortisol_rhythm", "morning_light", True, at("09:30"), at("10:30"))  # daylight, late
+    rep = next(r for r in a.status(at("10:30")) if r.contract.id == "cortisol_rhythm")
+    light = next(r for r in rep.results if r.rule.id == "morning_light")
+    assert light.status is Status.LATE and light.earned == 1.5 and "awakening peak" in light.rule.late_why
+    p = _points(rep.results)
+    assert round(100 * p["earned"] / p["possible"]) == rep.score
+    a.correct("cortisol_rhythm", "morning_light", False, None, at("10:30"))
+    assert next(r for r in a.status(at("10:30")) if r.contract.id == "cortisol_rhythm").score < rep.score

@@ -28,6 +28,7 @@
       "actions": ["wake"], "window": {"anchor": "wake", "start": -120, "end": 180},
       "tolerance": 30, "lookback_days": 7, "weight": 2, "strength": "moderate",
       "why": "The cortisol awakening response is triggered by the act of waking; a stable wake time keeps the daily cortisol curve anchored.",
+      "late_why": "A late wake-up still starts your cortisol rise, but a shifted wake time moves the whole daily curve and makes tonight's sleep harder.",
       "advice": "Get up at your planned wake time, weekends included.",
       "sources": ["fries2009", "clow2010"],
       "nudge": {"at": 0, "text": "⏰ Time to get up — same time as every day keeps your cortisol peak on schedule."}
@@ -37,6 +38,7 @@
       "actions": ["sunlight", "bright_light"], "window": {"anchor": "wake", "start": 0, "end": 60},
       "weight": 3, "strength": "moderate",
       "why": "Moving from dim to bright light in the morning produces an immediate cortisol rise; dawn light enhances the awakening response.",
+      "late_why": "Light later in the morning still raises cortisol and helps set your body clock, but the extra boost to the awakening peak (first 30–45 min after waking) has passed.",
       "advice": "Get 10+ minutes of outdoor daylight (or bright light) within an hour of waking.",
       "sources": ["leproult2001", "thorn2004"],
       "pairs": [{"with": "regular_breakfast", "text": "Have breakfast outside or by a bright window — daylight and breakfast in one."},
@@ -45,9 +47,10 @@
     },
     {
       "id": "morning_movement", "title": "Move in the morning", "label": "Move", "duration": 30, "phase": "morning", "kind": "do",
-      "actions": ["exercise_light", "exercise_intense"], "window": {"anchor": "wake", "start": 0, "end": 180},
+      "actions": ["exercise_light", "exercise_intense", "running"], "window": {"anchor": "wake", "start": 0, "end": 180},
       "weight": 1, "strength": "emerging",
       "why": "Exercise acutely raises cortisol; placing it in the morning works with the natural peak instead of against the evening decline.",
+      "late_why": "Moving later still adds energy and activity, but no longer lines up with your natural morning cortisol peak.",
       "advice": "Fit in a walk or workout before mid-morning.",
       "sources": ["hill2008"],
       "nudge": {"at": 90, "text": "A short walk or workout in the next 90 minutes keeps your energy curve front-loaded."}
@@ -63,7 +66,7 @@
     },
     {
       "id": "no_late_intense_exercise", "title": "No intense exercise in the last hour", "label": "No hard workouts", "phase": "evening", "kind": "avoid",
-      "actions": ["exercise_intense", "padel", "surf"], "window": {"anchor": "sleep", "start": -60, "end": 0},
+      "actions": ["exercise_intense", "running", "padel", "surf"], "window": {"anchor": "sleep", "start": -60, "end": 0},
       "weight": 2, "strength": "moderate",
       "why": "Evening exercise is fine in general, but vigorous exercise within ~1 hour of bedtime impairs sleep onset.",
       "advice": "Keep it to light stretching this close to bed.",
@@ -83,6 +86,7 @@
       "actions": ["wind_down"], "window": {"anchor": "sleep", "start": -90, "end": 0},
       "weight": 1, "strength": "emerging",
       "why": "Relaxation and mindfulness practices lower cortisol.",
+      "late_why": "Winding down later still helps you relax, but there's less time for cortisol to drop before sleep.",
       "advice": "15 minutes of reading, breathing or stretching in dim light.",
       "sources": ["pascoe2017"],
       "nudge": {"at": -60, "text": "Time to wind down: 15 minutes of reading or slow breathing, lights low."}
@@ -92,6 +96,7 @@
       "actions": ["sleep"], "window": {"anchor": "sleep", "start": -120, "end": 180},
       "tolerance": 30, "lookback_days": 7, "weight": 2, "strength": "moderate",
       "why": "Short or shifted sleep raises cortisol the following evening, flattening the rhythm.",
+      "late_why": "Going to bed at all beats staying up, but an irregular bedtime shifts your rhythm and tomorrow's wake-up.",
       "advice": "Lights out at your planned bedtime.",
       "sources": ["leproult1997"]
     }

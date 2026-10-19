@@ -151,12 +151,13 @@ class Simulation:
     def change_plan(self, body: dict) -> None:
         """Owner reshapes today: move an upcoming goal, take it off today, or put it back."""
         cid, rid, action = body["contract_id"], body["rule_id"], body["action"]
+        day = date.fromisoformat(body["day"]) if body.get("day") else None
         if action == "move":
             self.assistant.move_goal(cid, rid, self._at_today(body["at"]), self.now)
         elif action == "skip":
-            self.assistant.skip_goal(cid, rid, self.now)
+            self.assistant.skip_goal(cid, rid, self.now, day)
         elif action == "restore":
-            self.assistant.restore_goal(rid, self.now)
+            self.assistant.restore_goal(rid, self.now, day)
         else:
             raise KeyError(action)
 
@@ -460,11 +461,20 @@ class Simulation:
         return {
             "id": rep.contract.id, "name": rep.contract.name, "goal": rep.contract.goal, "score": rep.score,
             "phase": rep.phase.goal if rep.phase else None,
+            "points": _points(rep.results),
             "rules": [{"id": r.rule.id, "title": r.rule.title, "kind": r.rule.kind.value, "status": r.status.value,
                        "detail": r.detail, "strength": r.rule.strength, "why": r.rule.why,
+                       "earned": r.earned, "weight": r.rule.weight, "late_credit": r.rule.late_credit, "late_why": r.rule.late_why,
                        "sources": [rep.contract.sources[s] for s in r.rule.sources],
                        "window": f"{r.start:%H:%M}–{r.end:%H:%M}"} for r in rep.results],
         }
+
+
+def _points(results) -> dict:
+    """What the score is made of: points earned / possible over the goals judged so far (same sum as engine.evaluate)."""
+    judged = [r for r in results if r.earned is not None]
+    return {"earned": round(sum(r.earned for r in judged), 2), "possible": sum(r.rule.weight for r in judged),
+            "unjudged": len(results) - len(judged)}
 
 
 KEYSTORE = KeyStore()  # the owner's Claude API key: macOS Keychain (or a private file), shared by all modes

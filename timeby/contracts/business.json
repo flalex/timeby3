@@ -87,7 +87,7 @@
       "topic": "Own business"
     },
     {
-      "id": "start_work",
+      "id": "start_work", "off_by_default": true,
       "title": "Start work at the usual time",
       "label": "Start work",
       "topic": "Full-time job (9–5)",
@@ -125,7 +125,7 @@
       }
     },
     {
-      "id": "work_break",
+      "id": "work_break", "off_by_default": true,
       "title": "Break away from the screen",
       "label": "Afternoon break",
       "topic": "Full-time job (9–5)",
@@ -162,7 +162,7 @@
       }
     },
     {
-      "id": "finish_work",
+      "id": "finish_work", "off_by_default": true,
       "title": "Finish work on time",
       "label": "Finish on time",
       "topic": "Full-time job (9–5)",
@@ -200,7 +200,7 @@
       }
     },
     {
-      "id": "switch_off",
+      "id": "switch_off", "off_by_default": true,
       "title": "Switch off after work",
       "label": "Switch off after work",
       "topic": "Full-time job (9–5)",

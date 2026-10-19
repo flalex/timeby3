@@ -77,10 +77,15 @@ def _rule(raw: dict) -> Rule:
         topic=raw.get("topic", ""),
         pairs=tuple(Pair(p["with"], p["text"]) for p in raw.get("pairs", ())),
         late_credit=float(raw.get("late_credit", 0.5)),
+        late_why=raw.get("late_why", DEFAULT_LATE_WHY),
         remind=bool(raw.get("remind", True)),
+        off_by_default=bool(raw.get("off_by_default", False)),
         weekly_target=raw.get("weekly_target"),
         weekly_why=raw.get("weekly_why", ""),
     )
+
+
+DEFAULT_LATE_WHY = "Doing it late still beats skipping it, but the timing is the point of this goal."
 
 
 def _validate(contract: Contract, actions: dict[str, str]) -> None:

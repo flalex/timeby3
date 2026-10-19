@@ -103,7 +103,8 @@ def _place_task(rep: ContractReport, r: RuleResult, now: datetime) -> dict:
         return _item(rep, r, "earlier", r.hit_at, outcome=f"{r.hit_at:%H:%M}", tone="good")
     if r.status is Status.LATE:
         credit = f"{round(r.rule.late_credit * 100)}% credit"
-        return _item(rep, r, "earlier", r.hit_at, outcome=f"Late · {r.hit_at:%H:%M} · {credit}", tone="late")
+        return _item(rep, r, "earlier", r.hit_at, outcome=f"Late · {r.hit_at:%H:%M} · {credit}", tone="late",
+                     late_note=f"Late earns {credit} — missed earns 0. {r.rule.late_why}")
     if r.status is Status.MISSED:
         return _item(rep, r, "earlier", r.deadline, outcome="Missed", tone="bad")
     if r.status is Status.WAITING:
@@ -150,7 +151,7 @@ def _extras(rep: ContractReport, r: RuleResult, item: dict, note: dict, wake: Wa
         earliest, latest = (r.start, min(r.end - timedelta(minutes=1), now)) if rule.kind is RuleKind.AVOID \
             else (day_start, now)
         extras["edit"] = {"happened": happened, "at": f"{min(default_at, latest):%H:%M}",
-                          "min": f"{earliest:%H:%M}", "max": f"{latest:%H:%M}"}
+                          "min": f"{earliest:%H:%M}", "max": f"{latest:%H:%M}", "until_now": latest == now}
     return extras
 
 

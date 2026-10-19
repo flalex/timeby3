@@ -68,7 +68,9 @@ class Rule:
     topic: str = ""              # groups goals inside an agent, e.g. "Meal regularity"
     pairs: tuple[Pair, ...] = () # goals that can be combined with this one when time is short
     late_credit: float = 0.5     # share of the weight earned when done late (doing it late beats skipping)
+    late_why: str = ""           # what doing it late still gives, and what it misses (shown with the credit)
     remind: bool = True          # False: no own reminder (e.g. raised together with a paired goal)
+    off_by_default: bool = False # an opt-in goal (e.g. a 9–5 job): the owner switches it on in ⚙︎
     weekly_target: int | None = None  # how many times a week counts as success; None = most planned days
     weekly_why: str = ""              # why that target (shown in the weekly view)
     lookback_days: int = 7     # regularity only

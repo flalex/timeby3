@@ -40,6 +40,7 @@ class Assistant:
         self.skipped: set[tuple[date, str, str]] = set()      # goals the recovery plan dropped (no reminders)
         self.agent_context: dict[str, str] = {}               # owner's extra context per agent (AI recommendations)
         self.tone = tones.DEFAULT                              # voice of every message (facts never change)
+        self.tracked_from: dict[date, datetime] | None = None  # live: when each day's tracking started
         self.actions = actions
         self.notifier = notifier
         self.wake_anchor = wake_anchor
@@ -64,7 +65,7 @@ class Assistant:
 
     @property
     def ctx(self) -> engine.Context:
-        return engine.Context(self.profile, tuple(self.events), self.wait_for_observed)
+        return engine.Context(self.profile, tuple(self.events), self.wait_for_observed, self.tracked_from)
 
     # --- inbound ----------------------------------------------------------------------------
 
@@ -116,6 +117,7 @@ class Assistant:
     def tick(self, now: datetime) -> list[Message]:
         """Call periodically. Each rule gets one reminder per day, unless snoozed or just mentioned."""
         day = self.ctx.logical_day(now)
+        self.start_tracking(now)
         reports = self.status(now)
         candidates = self._routines(day, reports, now)  # first, so the brief can cover reminders due now
         candidates += [m for rep in reports for m in engine.due_reminders(rep, self.ctx, now)]
@@ -128,6 +130,11 @@ class Assistant:
     def is_busy(self, now: datetime) -> bool:
         return any(start <= now < end for start, end in self.busy)
 
+    def start_tracking(self, now: datetime) -> None:
+        """Live mode: today is judged from the first moment the assistant is running (no-op elsewhere)."""
+        if self.tracked_from is not None:
+            self.tracked_from.setdefault(self.ctx.logical_day(now), now)
+
     def _held(self, day: date, m: Message, now: datetime) -> bool:
         """No reminders for goals the recovery plan dropped, none during a meeting (held, not claimed, so they
         go out once it ends if still valid), and none but the wake-up call while still asleep."""
@@ -135,9 +142,15 @@ class Assistant:
             return False
         if (day, m.contract_id, m.rule_id) in self.skipped or self.is_busy(now):
             return True
+        return self.wait_for_observed and self._asleep(day, now) and self._rule(m.contract_id, m.rule_id).window.anchor != self.wake_anchor
+
+    def _asleep(self, day: date, now: datetime) -> bool:
+        """Past the planned wake-up with no sign of the owner yet. Any record today means they're up (it's the day's
+        first record that tells), and after a few hours without one the plan stands anyway."""
         ctx = self.ctx
-        asleep = ctx.observed(self.wake_anchor, day) is None and now >= ctx.planned_anchor(self.wake_anchor, day)
-        return self.wait_for_observed and asleep and self._rule(m.contract_id, m.rule_id).window.anchor != self.wake_anchor
+        planned = ctx.planned_anchor(self.wake_anchor, day)
+        any_record = any(ctx.logical_day(e.at) == day and e.at <= now for e in self.events)
+        return ctx.observed(self.wake_anchor, day) is None and not any_record and planned <= now < planned + engine.OBSERVE_RADIUS
 
     def _claim(self, day: date, m: Message, now: datetime) -> bool:
         key, rule_key = (day, m.kind, m.contract_id, m.rule_id), (day, m.contract_id, m.rule_id)

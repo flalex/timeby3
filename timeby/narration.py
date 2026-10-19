@@ -104,7 +104,7 @@ def why_reply(result: RuleResult, sources: dict[str, str]) -> str:
     return f"{result.rule.title} ({result.rule.strength} evidence): {result.rule.why}\nSources:\n{refs}"
 
 
-_ICON = {Status.DONE: "✓", Status.CLEAN: "✓", Status.MISSED: "✗", Status.VIOLATED: "⚠", Status.PENDING: "·", Status.WAITING: "…", Status.LATE: "◐"}
+_ICON = {Status.DONE: "✓", Status.CLEAN: "✓", Status.MISSED: "✗", Status.VIOLATED: "⚠", Status.PENDING: "·", Status.WAITING: "…", Status.LATE: "◐", Status.UNTRACKED: "·"}
 
 
 def feedback(result: RuleResult) -> str:

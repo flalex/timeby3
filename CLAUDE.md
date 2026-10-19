@@ -66,8 +66,11 @@ scoring of situation/state) must be deterministic and grounded — never random,
 - Interactive simulator: `python3 -m timeby.server` → http://localhost:8765 (v1), /v2, /v3 (current direction).
   Each version runs an independent simulation. v3 = desktop web app: Today/Insights + Assistant panel, demo bar + agent-activity feed;
   view model in `timeby/today.py` (earlier / now / later), `wait_for_observed=True`, `compact_routines=True`.
-- Live (non-demo) mode: http://localhost:8765/live — real clock, nothing scripted. Saved to `data/live/` (or
-  `TIMEBY_DATA_DIR`): one JSON file per logical day + `settings.json` (`storage.py`); restored on server start.
+- Live (non-demo) mode: http://localhost:8765/live — real clock, nothing scripted, no fake records: only the owner's
+  own logs and the agent's messages. Saved to `data/live/` (or `TIMEBY_DATA_DIR`): one JSON file per logical day
+  (+ `tracking_from`) and `settings.json` (`storage.py`); restored on server start. Goals that ended before tracking
+  started that day are UNTRACKED ("No record"): never judged missed/kept, excluded from scores and weekly targets.
+  The day's first record means the owner is awake (releases reminders held "while asleep").
 - AI recommendations (live only, `ai.py`): one function per agent (`recommend_<agent>`), shared prompt/call, grounded
   on the engine's facts + the owner's per-agent context (⚙︎). Needs `pip install -r requirements-ai.txt` and
   `ANTHROPIC_API_KEY`; model `claude-opus-5-5` with server-side refusal fallback. Claude advises, never decides.

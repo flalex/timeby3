@@ -20,6 +20,7 @@ class Status(str, Enum):
     VIOLATED = "violated"
     WAITING = "waiting"  # depends on an event (e.g. wake) that hasn't been observed yet
     LATE = "late"        # done, but off schedule: earns the rule's late_credit share
+    UNTRACKED = "untracked"  # live: the goal ended before tracking started that day and nothing was recorded
 
 
 POSITIVE = {Status.DONE, Status.CLEAN}

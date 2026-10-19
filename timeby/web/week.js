@@ -2,7 +2,7 @@
 // Replaces the Day view in the main column when "Week" is selected. Reuses v3.html globals
 // (S, view, setView, render, ICONS, esc, $).
 (() => {
-  const MARK = { done: "✓", late: "◐", missed: "✕", open: "", planned: "" };
+  const MARK = { done: "✓", late: "◐", missed: "✕", open: "", planned: "", untracked: "·" };
   const STATE = { met: ["Met", "good"], on_track: ["On track", ""], at_risk: ["At risk", "late"], critical: ["Critical", "bad"],
     out_of_reach: ["Out of reach", "bad"], none: ["—", ""] };
 
@@ -42,6 +42,7 @@
     .wk-dot.need { border-color: var(--bad); border-style: solid; }
     .wk-dot.open.need { border-color: var(--bad); }
     .wk-dot.none { width: 8px; height: 2px; border-radius: 1px; background: var(--line); }
+    .wk-dot.untracked { color: var(--faint); }
     .chip-s { font-size: 11px; border-radius: 999px; padding: 1px 8px; background: var(--surface-2); color: var(--muted); white-space: nowrap; }
     .chip-s.good { background: var(--accent-soft); color: var(--accent); } .chip-s.late { background: var(--warn-soft); color: var(--warn); }
     .chip-s.bad { background: var(--bad-soft); color: var(--bad); }
@@ -54,7 +55,7 @@
     $("week").innerHTML = `
       <div class="wk-head"><div><b>This week</b><span class="range">${esc(w.range)}</span></div>
         <div class="wk-legend"><span><i class="wk-dot done">✓</i>on time</span><span><i class="wk-dot late">◐</i>late</span>
-          <span><i class="wk-dot missed">✕</i>missed</span><span><i class="wk-dot planned"></i>planned</span><span><i class="wk-dot planned need"></i>needed</span></div></div>
+          <span><i class="wk-dot missed">✕</i>missed</span>${S.today?.tracking ? `<span><i class="wk-dot untracked">·</i>no record</span>` : ""}<span><i class="wk-dot planned"></i>planned</span><span><i class="wk-dot planned need"></i>needed</span></div></div>
       ${focusHtml(w.focus)}
       <div class="wk-wrap"><div class="wk-grid">${headerHtml(w.days)}${w.agents.map((a) => agentRows(a, todayIndex)).join("")}</div></div>`;
   }

@@ -13,8 +13,9 @@ from .engine import applies
 from .model import Contract, Rule, Status
 
 DONE, LATE, MISSED, OPEN, PLANNED = "done", "late", "missed", "open", "planned"
+UNTRACKED = "untracked"  # live: no record and nobody was watching yet — never counted
 CELL = {Status.DONE: DONE, Status.CLEAN: DONE, Status.LATE: LATE, Status.MISSED: MISSED, Status.VIOLATED: MISSED,
-        Status.PENDING: OPEN, Status.WAITING: OPEN}
+        Status.PENDING: OPEN, Status.WAITING: OPEN, Status.UNTRACKED: UNTRACKED}
 HABIT_SHARE = 5 / 7  # default target: most planned days — an occasional miss doesn't break a habit
 DEFAULT_WHY = "Most days count — an occasional miss doesn't break the habit."
 
@@ -83,7 +84,7 @@ def _cell(contract_id: str, rule: Rule, day: date, today: date, results: dict) -
 
 
 def _progress(rule: Rule, days: list[date], cells: list[str | None], today: date) -> Progress:
-    planned = sum(c is not None for c in cells)
+    planned = sum(c not in (None, UNTRACKED) for c in cells)  # untracked days don't count toward the target
     done = sum(c == DONE for c in cells)  # the week counts proper, on-time completions; late shows as ◐
     judged = done + sum(c in (LATE, MISSED) for c in cells)
     remaining = [d for d, c in zip(days, cells) if c in (OPEN, PLANNED)]

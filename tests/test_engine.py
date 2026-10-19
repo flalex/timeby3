@@ -786,3 +786,62 @@ def test_week_uses_weekly_targets_and_weekday_plans():
     assert "WHO" in workout["why"]
     assert goals["regular_lunch"]["target"] == 5  # daily goal: most days
     assert any(f["id"] == "workout" for f in w["focus"])  # critical and doable today
+
+
+# --- live: only the owner's own records; nothing judged before tracking started -------------
+
+def live_at(store_dir, hhmm, day=DAY):
+    from timeby.server import Simulation
+    from timeby.storage import LiveStore
+    from unittest import mock
+    with mock.patch("timeby.server.datetime") as fake_dt:  # the server reads the real clock at start
+        fake_dt.now.return_value = at(hhmm, day)
+        fake_dt.combine = datetime.combine
+        s = Simulation(wait_for_observed=True, compact_routines=True, today=day, live=True, store=LiveStore(store_dir))
+    s.sync = lambda: []
+    return s
+
+
+def test_live_fresh_start_invents_no_outcomes(tmp_path):
+    s = live_at(tmp_path, "15:28")
+    statuses = {r.rule.id: r.status for rep in s.assistant.status(s.now) for r in rep.results}
+    for goal in ("consistent_wake", "morning_light", "regular_breakfast", "regular_lunch", "plants_lunch"):
+        assert statuses[goal] is Status.UNTRACKED, goal
+    assert Status.MISSED not in statuses.values() and Status.CLEAN not in statuses.values()
+    assert all(rep.score is None for rep in s.assistant.status(s.now))  # no fake "0" scores
+    today = s.state()["today"]
+    assert today["tracking"] == {"from": "15:28", "untracked": sum(i["tone"] == "none" for i in today["earlier"])}
+    assert not any(i["tone"] == "bad" for i in today["earlier"])
+
+
+def test_live_judges_normally_after_tracking_started_and_keeps_own_records(tmp_path):
+    s = live_at(tmp_path, "15:28")
+    s.now = at("21:00")  # dinner window (17:30–20:30) closed after tracking started, nothing logged
+    dinner = result_of(s.assistant, "regular_dinner", s.now)
+    assert dinner.status is Status.MISSED
+    s.log("meal")  # the owner's own record at 21:00 (late) breaks "kitchen closed"
+    assert result_of(s.assistant, "no_late_eating", s.now).status is Status.VIOLATED
+
+
+def test_live_tracking_start_is_saved_in_the_day_file_and_restored(tmp_path):
+    import json
+    s = live_at(tmp_path, "15:28")
+    s.persist()
+    saved = json.loads((tmp_path / f"{DAY.isoformat()}.json").read_text())
+    assert saved["tracking_from"] == at("15:28").isoformat(timespec="minutes") and saved["events"] == []
+    again = live_at(tmp_path, "16:00")  # restart later the same day: tracking still counts from 15:28
+    assert again.assistant.tracked_from[DAY] == at("15:28")
+
+
+def test_first_record_of_the_day_means_awake_and_reminders_stop_waiting(tmp_path):
+    a = v3_assistant()
+    assert a._asleep(DAY, at("08:00"))
+    a.log("water", at("08:05"))  # any record today: the owner is up
+    assert not a._asleep(DAY, at("08:10"))
+    b = v3_assistant()
+    assert not b._asleep(DAY, at("10:30"))  # 3 h past the planned wake-up: the plan stands
+
+
+def test_demo_still_judges_the_whole_day(tmp_path):
+    a = v3_assistant()
+    assert result_of(a, "regular_lunch", at("15:28")).status is Status.MISSED

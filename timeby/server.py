@@ -95,9 +95,9 @@ class Simulation:
     # --- live data --------------------------------------------------------------------------
 
     def _restore(self) -> None:
-        if not self.store:
-            return
-        settings = self.store.restore(self.assistant)
+        self.assistant.tracked_from = {}  # live: only what the owner and the agent record; nothing judged before tracking
+        settings = self.store.restore(self.assistant) if self.store else {}
+        self.assistant.start_tracking(self.now)
         self.profile, self.day_overrides = self.assistant.profile, dict(self.assistant.day_overrides)
         if settings.get("telegram"):
             self.telegram = TelegramChannel(**settings["telegram"])
@@ -283,7 +283,8 @@ class Simulation:
             "today": build_today(reports, now, self.assistant.notes_for(day), plan_wake(ctx, now),
                                  datetime.combine(day, self.assistant.profile.day_start),
                                  self.assistant.late_starts.get(day),
-                                 {rid for d, _, rid in self.assistant.skipped if d == day}),
+                                 {rid for d, _, rid in self.assistant.skipped if d == day},
+                                 (self.assistant.tracked_from or {}).get(day)),
             "scenario": self.scenario.id,
             "scenarios": [{"id": sc.id, "label": sc.label, "description": sc.description} for sc in SCENARIOS.values()],
             "agents": self._agents(),

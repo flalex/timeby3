@@ -59,6 +59,7 @@ class LiveStore:
             "sent": on_day(a.sent),
             "delivered": on_day(a.delivered),
             "skipped": on_day(a.skipped),
+            "tracking_from": a.tracked_from[day].isoformat(timespec="minutes") if day in (a.tracked_from or {}) else None,
         }
 
     def _write(self, name: str, payload: dict) -> None:
@@ -97,3 +98,5 @@ class LiveStore:
         a.sent |= {(day, *k) for k in map(tuple, d.get("sent", []))}
         a.delivered |= {(day, *k) for k in map(tuple, d.get("delivered", []))}
         a.skipped |= {(day, *k) for k in map(tuple, d.get("skipped", []))}
+        if d.get("tracking_from") and a.tracked_from is not None:
+            a.tracked_from[day] = datetime.fromisoformat(d["tracking_from"])

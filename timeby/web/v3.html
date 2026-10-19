@@ -224,6 +224,8 @@ body.live .demo-only { display: none !important; }
 .late-start { width: 100%; border: 0; border-top: 1px solid var(--line); background: none; display: grid; grid-template-columns: 64px 30px 1fr auto;
   gap: 10px; align-items: center; min-height: 46px; text-align: left; padding: 0; color: var(--warn); font-size: 14px; font-weight: 600; }
 .late-start .meta { font-weight: 500; color: var(--muted); font-size: 13px; }
+.late-start.untracked { color: var(--muted); font-weight: 500; }
+.row.past.none .name, .row.past.none .meta { color: var(--faint); }
 .row.current { background: var(--accent-soft); margin: 0 -18px; padding: 0 18px; border-top-color: transparent; }
 .row.current::before { content: ""; position: absolute; left: 0; top: 8px; bottom: 8px; width: 3px; border-radius: 0 3px 3px 0; background: var(--accent); }
 .row.current .name { font-weight: 600; }
@@ -436,7 +438,7 @@ const DAY_SHORT = { mon: "Mon", tue: "Tue", wed: "Wed", thu: "Thu", fri: "Fri", 
 const DONE_LABEL = { wake: "I'm up", sleep: "Going to bed", meal: "Eating now" };
 const PROACTIVE = new Set(["nudge", "last_call", "brief", "recap", "recovery"]);
 const STATUS_WORD = { done: ["Done", "good"], clean: ["Kept", "good"], missed: ["Missed", "bad"], violated: ["Broken", "bad"], late: ["Late", "late"],
-  pending: ["Open", ""], waiting: ["After waking", ""] };
+  pending: ["Open", ""], waiting: ["After waking", ""], untracked: ["No record", ""] };
 const $ = (id) => document.getElementById(id);
 const dayMin = (hhmm) => { const [h, m] = hhmm.split(":").map(Number); return (h * 60 + m - 240 + 1440) % 1440; };  // day starts 04:00
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -574,7 +576,7 @@ function agentCard(a, report) {
 
 const scoreTone = (score) => (score >= 75 ? "good" : score >= 50 ? "mid" : "low");
 const COUNT_WORDS = [["done", "done"], ["clean", "kept"], ["late", "late"], ["missed", "missed"], ["violated", "broken"],
-  ["pending", "open"], ["waiting", "after waking"]];
+  ["pending", "open"], ["waiting", "after waking"], ["untracked", "no record"]];
 
 function agentInsight(a, report) {
   const goals = Object.fromEntries(a.goals.map((g) => [g.id, g]));
@@ -729,11 +731,13 @@ let withBusy = (items, toRows) => items.flatMap(toRows);  // calendar.js replace
 
 function timelineSection(t) {
   const ls = t.late_start;
-  const past = ls ? t.earlier.filter((i) => i.cause !== "late_start") : t.earlier;
+  const untracked = t.earlier.filter((i) => i.tone === "none");
+  const past = t.earlier.filter((i) => i.tone !== "none" && !(ls && i.cause === "late_start"));
   const keepOpen = past.findIndex((i) => i.rule_id === editing);
   const foldCount = showAllEarlier ? 0 : Math.max(0, past.length - PAST_VISIBLE);
   const folded = past.slice(0, keepOpen >= 0 ? Math.min(foldCount, keepOpen) : foldCount);
   const rows = [];
+  if (t.tracking && untracked.length) rows.push(...untrackedRows(t.tracking, untracked));
   if (folded.length) rows.push(foldRow(folded));
   rows.push(...withBusy(past.slice(folded.length), (i) => i.root && ls ? lateStartRows(i, ls, t.earlier) : [pastRow(i)], "past"));
   rows.push(`<div class="nowline" title="Now"><span class="pill num">${S.clock}</span></div>`);
@@ -763,7 +767,7 @@ function foldRow(items) {
     <span>${items.length} earlier · ${items.length - missed} done${missed ? `, ${missed} missed` : ""}</span><span>Show</span></button>`;
 }
 
-const MARKS = { good: ["ok", "✓"], bad: ["no", "✕"], late: ["half", "◐"], skip: ["skip", "–"] };
+const MARKS = { good: ["ok", "✓"], bad: ["no", "✕"], late: ["half", "◐"], skip: ["skip", "–"], none: ["skip", "·"] };
 
 function pastRow(i, extra = "") {
   const open = editing === i.rule_id, [markCls, mark] = MARKS[i.tone] || MARKS.good;
@@ -771,6 +775,16 @@ function pastRow(i, extra = "") {
   return `<div class="row past ${i.tone} ${extra} ${open ? "editing" : ""}" data-edit="${i.rule_id}" title="Click to edit">
     ${timeCell(i.at, i)}<span class="mark ${markCls}">${mark}</span>${nameCell(i)}
     <span class="meta">${esc(meta)}</span></div>${open ? editorHtml(i) : ""}`;
+}
+
+let untrackedOpen = false;
+
+/** Live: goals that ended before tracking started today — no outcome is invented, they're simply not recorded. */
+function untrackedRows(tracking, items) {
+  const head = `<button class="late-start untracked" id="untracked-toggle"><span class="t num">${tracking.from}</span><span class="mark skip">·</span>
+    <span class="name"><span>Tracking started · ${items.length} earlier goal${items.length > 1 ? "s" : ""} with no record</span></span>
+    <span class="meta">${untrackedOpen ? "hide" : "show"}</span></button>`;
+  return [head, ...(untrackedOpen ? items.map((i) => pastRow(i, "child")) : [])];
 }
 
 function lateStartRows(root, ls, earlier) {
@@ -840,6 +854,7 @@ function bindToday() {
     await api("log", { action: partner.action });
   });
   v.querySelector("#late-start")?.addEventListener("click", () => { lateOpen = !lateOpen; renderToday(); });
+  v.querySelector("#untracked-toggle")?.addEventListener("click", () => { untrackedOpen = !untrackedOpen; renderToday(); });
   v.querySelector("#tomorrow")?.addEventListener("click", () => { tomorrowOpen = !tomorrowOpen; renderToday(); });
   v.querySelectorAll("[data-edit]").forEach((row) => row.addEventListener("click", () => {
     editing = editing === row.dataset.edit ? null : row.dataset.edit;

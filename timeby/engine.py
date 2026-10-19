@@ -18,6 +18,7 @@ class Context:
     profile: Profile
     events: tuple[Event, ...]
     wait_for_observed: bool = False  # hold rules anchored on an unobserved event (e.g. wake) as WAITING
+    tracked_from: dict[date, datetime] | None = None  # live: when tracking started each day; None = judge everything
 
     def logical_day(self, at: datetime) -> date:
         start = self.profile.day_start
@@ -37,6 +38,13 @@ class Context:
         action = self.profile.anchors[name].observed_by
         seen = [e.at for e in self.events if e.action == action and abs(e.at - planned) <= OBSERVE_RADIUS]
         return min(seen, key=lambda at: abs(at - planned), default=None)
+
+    def untracked(self, day: date, end: datetime) -> bool:
+        """Live mode: a window that closed before tracking started that day can't be judged — nobody was watching."""
+        if self.tracked_from is None:
+            return False
+        start = self.tracked_from.get(day)
+        return start is None or end <= start
 
     def observed_anchor(self, name: str, day: date) -> datetime:
         return self.observed(name, day) or self.planned_anchor(name, day)
@@ -103,9 +111,11 @@ def _is_estimated(rule: Rule, ctx: Context, day: date) -> bool:
     return observable and ctx.observed(rule.window.anchor, day) is None
 
 
-def _waits_for_anchor(rule: Rule, ctx: Context, day: date) -> bool:
-    """A rule that follows an event (window starts at/after it) can't start before the event is observed."""
-    return ctx.wait_for_observed and rule.window.start >= 0 and _is_estimated(rule, ctx, day)
+def _waits_for_anchor(rule: Rule, ctx: Context, day: date, now: datetime) -> bool:
+    """A rule that follows an event (window starts at/after it) can't start before the event is observed —
+    but stops waiting once the event is long overdue (then the plan stands)."""
+    overdue = now >= ctx.planned_anchor(rule.window.anchor, day) + OBSERVE_RADIUS
+    return ctx.wait_for_observed and rule.window.start >= 0 and _is_estimated(rule, ctx, day) and not overdue
 
 
 def _open_until_observed(rule: Rule, ctx: Context, day: date, end: datetime, now: datetime) -> datetime:
@@ -124,7 +134,9 @@ def _judge_window(rule: Rule, ctx: Context, now: datetime) -> RuleResult:
     hits = ctx.matching(rule, start, end, now, day)
     on_time = [h for h in hits if start <= h.at < end]
     hit, over = bool(hits), now >= end
-    if _waits_for_anchor(rule, ctx, day) and not hit and not over:
+    if not hit and over and ctx.untracked(day, end):
+        status = Status.UNTRACKED
+    elif _waits_for_anchor(rule, ctx, day, now) and not hit and not over:
         status = Status.WAITING
     elif rule.kind is RuleKind.DO:  # a goal-tied event outside the window happened, but late
         status = Status.DONE if on_time else Status.LATE if hit else Status.MISSED if over else Status.PENDING
@@ -134,14 +146,14 @@ def _judge_window(rule: Rule, ctx: Context, now: datetime) -> RuleResult:
     return _result(rule, ctx, day, status, _earned(rule, status), hit_at=hits[0].at if hits else None, end=end)
 
 
-def _closest_hit(rule: Rule, ctx: Context, day: date, now: datetime) -> tuple[bool, datetime | None]:
-    """(judgeable, when the action happened). None = skipped once the window closed."""
+def _closest_hit(rule: Rule, ctx: Context, day: date, now: datetime) -> tuple[bool, datetime | None, bool]:
+    """(judgeable, when the action happened, untracked). None = skipped once the window closed."""
     target = ctx.planned_anchor(rule.window.anchor, day)
     start, end = bounds(rule.window, target)
     hits = ctx.matching(rule, start, end, now, day)
     if hits:
-        return True, min(hits, key=lambda e: abs(e.at - target)).at
-    return now >= end, None
+        return True, min(hits, key=lambda e: abs(e.at - target)).at, False
+    return now >= end, None, now >= end and ctx.untracked(day, end)
 
 
 def _judge_regularity(rule: Rule, ctx: Context, now: datetime) -> RuleResult:
@@ -151,8 +163,10 @@ def _judge_regularity(rule: Rule, ctx: Context, now: datetime) -> RuleResult:
     judged, on_time, credit, devs, today_status, today_hit = 0, 0, 0.0, [], Status.PENDING, None
 
     for day in (d for d in days if d >= first):
-        judgeable, hit_at = _closest_hit(rule, ctx, day, now)
-        if not judgeable:
+        judgeable, hit_at, untracked = _closest_hit(rule, ctx, day, now)
+        if untracked and day == today:
+            today_status = Status.UNTRACKED
+        if not judgeable or untracked:
             continue
         dev = round((hit_at - ctx.planned_anchor(rule.window.anchor, day)).total_seconds() / 60) if hit_at else None
         ok = dev is not None and abs(dev) <= rule.tolerance

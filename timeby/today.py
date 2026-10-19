@@ -12,7 +12,8 @@ WAKE_ANCHOR = "wake"  # profile anchor of waking up; its regularity goal is the 
 
 def build_today(reports: list[ContractReport], now: datetime, notes: dict | None = None,
                 wake: WakePlan | None = None, day_start: datetime | None = None,
-                late_start: RecoveryPlan | None = None, skipped: set[str] | None = None) -> dict:
+                late_start: RecoveryPlan | None = None, skipped: set[str] | None = None,
+                tracked_from: datetime | None = None) -> dict:
     notes, skipped = notes or {}, skipped or set()
     day_start = day_start or now.replace(hour=0, minute=0)
     slots = {"earlier": [], "now": [], "later": [], "avoid_now": []}
@@ -35,6 +36,7 @@ def build_today(reports: list[ContractReport], now: datetime, notes: dict | None
         "later": sorted(slots["later"], key=by_time),
         "tomorrow": _tomorrow(wake) if wake else None,
         "late_start": _mark_late_start(late_start, earlier, skipped),
+        "tracking": _tracking(tracked_from, earlier),
     }
 
 
@@ -70,9 +72,18 @@ def _mark_late_start(plan: RecoveryPlan | None, earlier: list[dict], skipped: se
 # --- placement: earlier / now / later -------------------------------------------------------
 
 def _place(rep: ContractReport, r: RuleResult, now: datetime) -> dict:
+    if r.status is Status.UNTRACKED:  # nobody was watching yet: no outcome is invented
+        return _item(rep, r, "earlier", r.deadline if r.rule.kind is not RuleKind.AVOID else r.end, outcome="No record", tone="none")
     if r.rule.kind is RuleKind.AVOID:
         return _place_avoid(rep, r, now)
     return _place_task(rep, r, now)
+
+
+def _tracking(tracked_from: datetime | None, earlier: list[dict]) -> dict | None:
+    """Live mode: when today's tracking started and how many earlier goals have no record (never judged)."""
+    if tracked_from is None:
+        return None
+    return {"from": f"{tracked_from:%H:%M}", "untracked": sum(i["tone"] == "none" for i in earlier)}
 
 
 def _place_avoid(rep: ContractReport, r: RuleResult, now: datetime) -> dict:

@@ -58,10 +58,12 @@ class LiveStore:
 
     def _day(self, a: Assistant, day: date) -> dict:
         on_day = lambda keys: sorted(list(k[1:]) for k in keys if k[0] == day)
+        records = lambda events: [{"action": e.action, "at": e.at.isoformat(timespec="minutes"), "goal": e.goal}
+                                  for e in events if a.ctx.logical_day(e.at) == day]
         return {
             "day": day.isoformat(),
-            "events": [{"action": e.action, "at": e.at.isoformat(timespec="minutes"), "goal": e.goal}
-                       for e in a.events if a.ctx.logical_day(e.at) == day],
+            "events": records(a.events),
+            "planned": records(a.planned),
             "notes": {_key(*k): note for k, note in a.notes_for(day).items()},
             "sent": on_day(a.sent),
             "delivered": on_day(a.delivered),
@@ -86,6 +88,7 @@ class LiveStore:
         for path in sorted(self.root.glob("????-??-??.json")):
             self._restore_day(assistant, json.loads(path.read_text()))
         assistant.events.sort(key=lambda e: e.at)
+        assistant.planned.sort(key=lambda e: e.at)
         return settings
 
     @staticmethod
@@ -102,7 +105,9 @@ class LiveStore:
     @staticmethod
     def _restore_day(a: Assistant, d: dict) -> None:
         day = date.fromisoformat(d["day"])
-        a.events += [Event(e["action"], datetime.fromisoformat(e["at"]), e.get("goal")) for e in d.get("events", [])]
+        records = lambda key: [Event(e["action"], datetime.fromisoformat(e["at"]), e.get("goal")) for e in d.get(key, [])]
+        a.events += records("events")
+        a.planned += records("planned")
         a.notes |= {(day, *_unkey(k)): note for k, note in d.get("notes", {}).items()}
         a.sent |= {(day, *k) for k in map(tuple, d.get("sent", []))}
         a.delivered |= {(day, *k) for k in map(tuple, d.get("delivered", []))}

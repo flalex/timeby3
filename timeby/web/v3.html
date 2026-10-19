@@ -165,6 +165,8 @@ body.live .demo-only { display: none !important; }
   font-size: 13px; color: var(--muted); border-bottom: 1px solid var(--line); margin-bottom: 4px; }
 .menu .when input { font: inherit; font-size: 14px; color: var(--ink); background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; padding: 4px 6px; }
 .row.past.rec { opacity: .85; }
+.row.planned-rec .dur { border-style: dashed; }
+.row.planned-rec .mark.rec { border-style: dashed; }
 .mark.rec { background: var(--surface-2); border: 1.5px solid var(--line); }
 .row.future.skipped > :not(.linkbtn) { opacity: .6; }
 .row[data-plan] { cursor: pointer; }
@@ -767,11 +769,11 @@ function nowSection(now, later) {
 const PAST_VISIBLE = 2;  // most recent past items stay unfolded
 
 /** The time a row shows: open goals "by" their due time, limits "now", later goals their start. */
-const shownTime = (i) => (i.slot === "later" ? i.at : i.kind === "avoid" ? S.clock : i.by);
+const shownTime = (i) => (i.type === "record" || i.slot === "later" ? i.at : i.kind === "avoid" ? S.clock : i.by);
 
 /** Open and later items in strict time order, so the timeline reads like a clock. */
 function upcoming(t) {
-  const items = [...(t.now.hero ? [t.now.hero] : []), ...t.now.also, ...t.now.avoid, ...t.later];
+  const items = [...(t.now.hero ? [t.now.hero] : []), ...t.now.also, ...t.now.avoid, ...t.later, ...ownRecords({ planned: true })];
   return items.map((i, n) => [dayMin(shownTime(i)), n, i]).sort((x, y) => x[0] - y[0] || x[1] - y[1]).map(([, , i]) => i);
 }
 let withBusy = (items, toRows) => items.flatMap(toRows);  // calendar.js replaces it to merge meetings in
@@ -790,7 +792,7 @@ function timelineSection(t) {
   rows.push(...withBusy(past.slice(folded.length), (i) => i.type === "record" ? [recordRow(i)]
     : i.root && ls ? lateStartRows(i, ls, t.earlier) : [pastRow(i)], "past"));
   rows.push(`<div class="nowline" title="Now"><span class="pill num">${S.clock}</span></div>`);
-  rows.push(...withBusy(upcoming(t), (i) => [i.slot === "later" ? futureRow(i) : currentRow(i, i === t.now.hero)],
+  rows.push(...withBusy(upcoming(t), (i) => [i.type === "record" ? recordRow(i) : i.slot === "later" ? futureRow(i) : currentRow(i, i === t.now.hero)],
     "upcoming", (i) => dayMin(shownTime(i))));
   rows.push(...skippedRows());
   if (t.tomorrow) rows.push(tomorrowRows(t.tomorrow));
@@ -798,21 +800,26 @@ function timelineSection(t) {
 }
 
 // --- the owner's own records: every log shows up, and can be moved or deleted ---
+const RECORD_TIME_HINT = "earlier = it happened then · later today = a plan, counted when its time comes";
 const recordKey = (r) => `rec:${r.action}@${r.at}`;
 const editKey = (i) => (i.type === "record" ? recordKey(i) : i.rule_id);
 
-/** Records no goal row already shows (e.g. surfing on a Monday, a coffee before the cut-off). */
-function ownRecords() {
-  return (S.records || []).filter((r) => !r.on_goal).map((r) => ({ ...r, type: "record", title: SHORT[r.action] || r.label, tone: "rec" }));
+const goalLabel = (rid) => S.agents.flatMap((a) => a.goals).find((g) => g.id === rid)?.label;
+
+/** Records no goal row already shows (e.g. surfing on a Monday, a coffee before the cut-off), plus plans for later. */
+function ownRecords({ planned = false } = {}) {
+  return (S.records || []).filter((r) => !r.on_goal && r.planned === planned)
+    .map((r) => ({ ...r, type: "record", title: goalLabel(r.goal) || SHORT[r.action] || r.label, tone: "rec" }));
 }
 
 function recordRow(r) {
   const open = editing === recordKey(r);
-  return `<div class="row past rec ${open ? "editing" : ""}" data-edit-rec="${recordKey(r)}" title="Click to change the time or delete">
+  return `<div class="row ${r.planned ? "later planned-rec" : "past"} rec ${open ? "editing" : ""}" data-edit-rec="${recordKey(r)}" title="Click to change the time or delete">
     ${timeCell(r.at, r)}<span class="mark rec">${ICONS[r.action] || "•"}</span>
-    <span class="name"><span>${esc(r.title)}</span><span class="dur">your record</span></span><span class="meta">${esc(r.source)}</span></div>
+    <span class="name"><span>${esc(r.title)}</span><span class="dur">${r.planned ? "planned" : "your record"}</span></span>
+    <span class="meta">${r.planned ? `counts at ${r.at}` : esc(r.source)}</span></div>
     ${open ? `<div class="editor" id="rec-editor">
-      <div class="fields"><label>Time ${timeField("rec-at", r.at)}</label></div>
+      <div class="fields"><label>Time ${timeField("rec-at", r.at)}</label><span class="ed-hint">${RECORD_TIME_HINT}</span></div>
       <div class="ed-err" id="rec-err" hidden></div>
       <div class="acts"><button class="btn primary" id="rec-save">Save</button><button class="btn secondary" id="rec-delete">Delete</button>
         <button class="btn secondary" id="rec-cancel">Cancel</button></div></div>` : ""}`;
@@ -901,11 +908,13 @@ function editorHtml(i) {
       <label>${avoid ? "When" : "Time"} ${timeField("ed-at", i.edit.at)}</label>
       ${avoid ? "" : `<label>Duration <input type="number" id="ed-dur" min="0" step="5" value="${i.duration ?? ""}"> min</label>`}
     </div>
-      <span class="ed-hint">${avoid ? `between ${i.edit.min} and ${i.edit.until_now ? "now" : i.edit.max}` : "any time earlier today"}</span>
+      <span class="ed-hint">${avoid ? `between ${i.edit.min} and ${i.edit.until_now ? "now" : i.edit.max}` : "any time today — later today means planned"}</span>
     ${i.late_note ? `<p class="ed-note">${esc(i.late_note)}</p>` : ""}
     <textarea id="ed-cmt" placeholder="Add a comment">${esc(i.comment)}</textarea>
     <div class="ed-err" id="ed-err" hidden></div>
-    <div class="acts"><button class="btn primary" id="ed-save">Save</button><button class="btn secondary" id="ed-cancel">Cancel</button></div>
+    <div class="acts"><button class="btn primary" id="ed-save">Save</button>
+      ${happened ? `<button class="btn secondary" id="ed-delete" title="Remove what was recorded — the goal goes back to how it stands without it">Delete record</button>` : ""}
+      <button class="btn secondary" id="ed-cancel">Cancel</button></div>
   </div>`;
 }
 
@@ -991,7 +1000,7 @@ async function applyChange(op, body, errorBox) {
 
 function bindRecordEditor() {
   if (!$("rec-editor")) return;
-  const r = ownRecords().find((x) => recordKey(x) === editing);
+  const r = [...ownRecords(), ...ownRecords({ planned: true })].find((x) => recordKey(x) === editing);
   const record = { action: r.action, at: r.at };
   $("rec-cancel").onclick = () => toggleEditor(editing);
   $("rec-save").onclick = async () => {
@@ -1028,18 +1037,20 @@ async function logNow(action, at = null) {
     S = data.state;
     route(data.messages, "log");
     render();
-    showToast({ kind: "info", at: S.clock, text: `Logged ${ICONS[action] || ""} ${SHORT[action] || action} at ${body.at || S.clock}.` });
-    logControl("Logged", `${SHORT[action] || action} ${body.at || S.clock}`);
+    const when = body.at || S.clock, verb = dayMin(when) > dayMin(S.clock) ? "Planned" : "Logged";
+    showToast({ kind: "info", at: S.clock, text: `${verb} ${ICONS[action] || ""} ${SHORT[action] || action} at ${when}.` });
+    logControl(verb, `${SHORT[action] || action} ${when}`);
   } catch (err) {
     showToast({ kind: "info", at: S.clock, text: err.message });
   }
 }
 
-/** Why a past item can't be set to this time, or "" when it can. The upper bound is the real "now" when it was now. */
-function timeProblem(at, edit) {
+/** Why an item can't be set to this time, or "" when it can. Tasks: any time today (later = planned). Limits: only
+ * within their window, up to the real "now" when the window is still open. */
+function timeProblem(at, edit, avoid) {
   if (!at) return TIME_HINT;
+  if (!avoid) return "";
   const latest = edit.until_now ? currentClock() : edit.max;
-  if (dayMin(at) > dayMin(latest) && edit.until_now) return `${at} hasn't happened yet — it's ${latest} now.`;
   if (dayMin(at) < dayMin(edit.min) || dayMin(at) > dayMin(latest)) return `Pick a time between ${edit.min} and ${latest}.`;
   return "";
 }
@@ -1058,17 +1069,20 @@ function bindEditor() {
   $("ed-cancel").onclick = () => { editing = null; renderToday(); };
   $("ed-save").onclick = async () => {
     const at = readTime("ed-at");
-    const problem = happened && timeProblem(at, item.edit);
+    const problem = happened && timeProblem(at, item.edit, item.kind === "avoid");
     if (problem) return showError("ed-err", problem);
-    const body = { contract_id: item.contract_id, rule_id: item.rule_id, happened, at,
-      duration: $("ed-dur")?.value || "", comment: $("ed-cmt").value };
-    try {
-      await post("edit", body);
-    } catch (err) { return showError("ed-err", err.message); }
-    editing = null;
-    logControl("Edited by owner", `${item.title} · ${happened ? (item.kind === "avoid" ? `broken ${at}` : `done ${at}`) : (item.kind === "avoid" ? "kept" : "missed")}`);
-    await api("state");
+    const planned = happened && item.kind !== "avoid" && dayMin(at) > dayMin(currentClock());
+    const what = !happened ? (item.kind === "avoid" ? "kept" : "missed") : planned ? `planned ${at}` : item.kind === "avoid" ? `broken ${at}` : `done ${at}`;
+    await saveEdit(item, { happened, at, duration: $("ed-dur")?.value || "", comment: $("ed-cmt").value }, what);
   };
+  const del = $("ed-delete");
+  if (del) del.onclick = () => saveEdit(item, { happened: false, at: "", duration: "", comment: "" }, "record deleted");
+}
+
+async function saveEdit(item, fields, what) {
+  if (await applyChange("edit", { contract_id: item.contract_id, rule_id: item.rule_id, ...fields }, "ed-err")) {
+    logControl("Edited by owner", `${item.title} · ${what}`);
+  }
 }
 
 function ruleInfo(ruleId) {

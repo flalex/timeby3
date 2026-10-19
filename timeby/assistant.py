@@ -41,6 +41,7 @@ class Assistant:
         self.agent_context: dict[str, str] = {}               # owner's extra context per agent (AI recommendations)
         self.tone = tones.DEFAULT                              # voice of every message (facts never change)
         self.tracked_from: dict[date, datetime] | None = None  # live: when each day's tracking started
+        self.planned: list[Event] = []  # owner's records for later today: counted only once their time comes
         self.plan_changes: dict[tuple[date, str], int | None] = {}  # owner's changes for a day: minutes moved / None = skipped
         self.actions = actions
         self.notifier = notifier
@@ -70,11 +71,11 @@ class Assistant:
 
     # --- inbound ----------------------------------------------------------------------------
 
-    def log(self, action: str, at: datetime) -> list[Message]:
+    def log(self, action: str, at: datetime, goal: str | None = None) -> list[Message]:
         """Record an action and send immediate feedback for every rule it affects."""
         if action not in self.actions:
             raise ValueError(f"unknown action '{action}'")
-        self.events.append(Event(action, at))
+        self.events.append(Event(action, at, goal))
         self.events.sort(key=lambda e: e.at)
         affected = [(rep, r) for rep in self.status(at) for r in rep.results
                     if action in r.rule.actions and r.start <= at < r.end]
@@ -115,9 +116,27 @@ class Assistant:
 
     # --- proactive --------------------------------------------------------------------------
 
+    def plan_record(self, action: str, at: datetime, goal: str | None = None) -> None:
+        """The owner logs something for later today ("surf at 18:00"): a plan, not a fact, until its time comes."""
+        if action not in self.actions:
+            raise ValueError(f"unknown action '{action}'")
+        self.planned.append(Event(action, at, goal))
+        self.planned.sort(key=lambda e: e.at)
+
+    def _count_due_plans(self, now: datetime) -> None:
+        """Planned records whose time has come count as done — the owner said so — and the owner is told, so a
+        changed plan is one tap to delete."""
+        due = [e for e in self.planned if e.at <= now]
+        self.planned = [e for e in self.planned if e.at > now]
+        for e in due:
+            self.log(e.action, e.at, e.goal)
+            self._reply(now, f"Counted your planned {self.actions[e.action].lower()} at {e.at:%H:%M}. "
+                             "If plans changed, delete it in the timeline.")
+
     def tick(self, now: datetime) -> list[Message]:
         """Call periodically. Each rule gets one reminder per day, unless snoozed or just mentioned."""
         day = self.ctx.logical_day(now)
+        self._count_due_plans(now)
         self.start_tracking(now)
         reports = self.status(now)
         candidates = self._routines(day, reports, now)  # first, so the brief can cover reminders due now
@@ -231,12 +250,14 @@ class Assistant:
         rule, day = result.rule, self.ctx.logical_day(now)
         earliest, latest = self.correctable_range(result, now)
         at = at or min(result.anchor_at, now)
-        if happened and at > now:
-            raise ValueError(f"{at:%H:%M} hasn't happened yet — it's {now:%H:%M} now")
-        if happened and not earliest <= at <= latest:
+        planning = happened and at > now and rule.kind is not RuleKind.AVOID and self.ctx.logical_day(at) == day
+        if happened and not planning and not earliest <= at <= latest:
             raise ValueError(f"time must be between {earliest:%H:%M} and {latest:%H:%M}")
         self.events = [e for e in self.events if not self._belongs(e, rule, result, day)]
-        if happened:  # a task's event is tied to its goal, so a late breakfast stays breakfast
+        self.planned = [e for e in self.planned if e.goal != rule.id]
+        if planning:  # "I'll do it at 16:10": the goal stays open until then
+            self.plan_record(rule.actions[0], at, rule.id)
+        elif happened:  # a task's event is tied to its goal, so a late breakfast stays breakfast
             self.events.append(Event(rule.actions[0], at, None if rule.kind is RuleKind.AVOID else rule.id))
             self.events.sort(key=lambda e: e.at)
 
@@ -279,17 +300,25 @@ class Assistant:
         return result
 
     def move_record(self, action: str, at: datetime, to: datetime, now: datetime) -> None:
+        """Any time today: earlier = it happened then, later = a plan that counts once its time comes."""
         event = self._record(action, at)
-        if not (to <= now and self.ctx.logical_day(to) == self.ctx.logical_day(at)):
-            raise ValueError(f"pick a time earlier today, up to {now:%H:%M}")
-        self.events[self.events.index(event)] = replace(event, at=to)
-        self.events.sort(key=lambda e: e.at)
+        if self.ctx.logical_day(to) != self.ctx.logical_day(now):
+            raise ValueError("pick a time today")
+        self.delete_record(action, at)
+        moved = replace(event, at=to)
+        if to > now:
+            self.planned.append(moved)
+            self.planned.sort(key=lambda e: e.at)
+        else:
+            self.events.append(moved)
+            self.events.sort(key=lambda e: e.at)
 
     def delete_record(self, action: str, at: datetime) -> None:
-        self.events.remove(self._record(action, at))
+        event = self._record(action, at)
+        (self.planned if event in self.planned else self.events).remove(event)
 
     def _record(self, action: str, at: datetime) -> Event:
-        event = next((e for e in self.events if e.action == action and e.at == at), None)
+        event = next((e for e in [*self.events, *self.planned] if e.action == action and e.at == at), None)
         if event is None:
             raise ValueError("that record no longer exists")
         return event

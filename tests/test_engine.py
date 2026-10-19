@@ -311,8 +311,10 @@ def test_correct_accepts_late_task_but_rejects_future_and_limit_outside_window()
     assert lunch.status is Status.LATE and lunch.hit_at == at("15:00")
     assert lunch.earned is not None and lunch.earned > 0
     a.log("wake", at("07:00"))
-    with pytest.raises(ValueError, match="07:35 hasn't happened yet — it's 07:30 now"):
-        a.correct("cortisol_rhythm", "morning_light", True, at("07:35"), at("07:30"))  # in the future
+    a.correct("cortisol_rhythm", "morning_light", True, at("07:35"), at("07:30"))  # "I'll do it at 07:35": a plan
+    assert result_of(a, "morning_light", at("07:30")).status is Status.PENDING
+    a.tick(at("07:35"))
+    assert result_of(a, "morning_light", at("07:36")).status is Status.DONE
     with pytest.raises(ValueError, match="between"):
         a.correct("cortisol_rhythm", "caffeine_cutoff", True, at("10:00"), at("18:00"))  # limit not active then
 
@@ -886,8 +888,9 @@ def test_records_can_be_moved_or_deleted_and_are_listed_for_the_timeline(tmp_pat
     handle(s, "record", {"action": "move", "record": {"action": "surf", "at": "15:40"}, "to": "15:00"})
     handle(s, "record", {"action": "delete", "record": {"action": "meal", "at": "12:40"}})
     assert [(r["action"], r["at"]) for r in s.state()["records"]] == [("surf", "15:00")]
-    with pytest.raises(ValueError, match="earlier today"):
-        handle(s, "log", {"action": "meal", "at": "18:00"})  # can't log the future
+    handle(s, "log", {"action": "padel", "at": "18:00"})  # later today: a plan, not a fact
+    padel = next(r for r in s.state()["records"] if r["action"] == "padel")
+    assert padel["planned"] is True and not any(e.action == "padel" for e in s.assistant.events)
 
 
 def test_plan_changes_are_saved_with_the_day(tmp_path):
@@ -1061,3 +1064,27 @@ def test_points_explain_the_score_and_late_beats_missed():
     assert round(100 * p["earned"] / p["possible"]) == rep.score
     a.correct("cortisol_rhythm", "morning_light", False, None, at("10:30"))
     assert next(r for r in a.status(at("10:30")) if r.contract.id == "cortisol_rhythm").score < rep.score
+
+
+def test_a_record_moved_ahead_is_a_plan_counted_when_its_time_comes_and_saved(tmp_path):
+    from timeby.server import handle
+    s = live_at(tmp_path, "16:27")
+    handle(s, "log", {"action": "surf", "at": "16:05"})
+    handle(s, "record", {"action": "move", "record": {"action": "surf", "at": "16:05"}, "to": "18:00"})
+    assert [(e.action, f"{e.at:%H:%M}") for e in s.assistant.planned] == [("surf", "18:00")]
+    assert not any(e.action == "surf" for e in s.assistant.events)
+    day_file = json.loads((tmp_path / f"{DAY.isoformat()}.json").read_text())
+    assert day_file["planned"] == [{"action": "surf", "at": f"{DAY.isoformat()}T18:00", "goal": None}]
+    assert [e.action for e in live_at(tmp_path, "16:30").assistant.planned] == ["surf"]  # survives a restart
+    s.now = at("17:59")
+    messages = s.advance(1, stop_on_agent=False)
+    assert any("Counted your planned surfing session at 18:00" in m["text"] for m in messages)
+    assert not s.assistant.planned and any(e.action == "surf" for e in s.assistant.events)
+
+
+def test_deleting_a_done_goal_record_reopens_the_goal():
+    a = v3_assistant()
+    a.correct("fitness", "workout", True, at("16:03"), at("16:05"))
+    assert result_of(a, "workout", at("16:05")).status is Status.DONE
+    a.correct("fitness", "workout", False, None, at("16:05"))
+    assert result_of(a, "workout", at("16:05")).status is Status.PENDING  # window still open: back to do

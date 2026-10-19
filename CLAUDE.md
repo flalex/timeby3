@@ -58,7 +58,10 @@ scoring of situation/state) must be deterministic and grounded — never random,
   critical / out of reach with the reason; "Needs you today" = critical or at-risk goals still doable today.
   The v3 demo simulates Wednesday of the current week so the week has a past.
 - Owner edits: every own record shows in the timeline (unless a goal row already shows it) and can be moved/deleted
-  (`Assistant.move_record/delete_record`); + Log takes "when" (earlier today). Upcoming goals can be moved to another
+  (`Assistant.move_record/delete_record`); + Log takes "when" (any time today). A time later today = a plan
+  (`Assistant.planned`, saved as "planned" in the day file): never seen by the engine until its time comes, then
+  counted (tick) with a note so a changed plan is one delete away. A done goal set to a later time becomes such a plan;
+  done goals also have "Delete record" (the goal goes back to how it stands without it). Upcoming goals can be moved to another
   time or skipped for today only (`Assistant.move_goal/skip_goal/restore_goal` → `plan_changes`, saved per day).
 - Week view: click a planned day (today while upcoming, or ahead) to skip it or the rest of the week — e.g. travelling
   (`Assistant.skip_goal/restore_goal(..., day)`; days ahead are saved in their own day file). Skipped days don't count

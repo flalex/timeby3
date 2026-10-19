@@ -140,12 +140,15 @@ class Simulation:
         return self.advance(minutes, stop_on_agent=False) if minutes > 0 else []
 
     def log(self, action: str, source: str = "you", at: datetime | None = None) -> list[dict]:
-        """Record an action now, or earlier today ("I had it at…")."""
+        """Record an action now, earlier today ("I had it at…") or later today (a plan: "surf at 18:00")."""
         at = at or self.now
-        if not (at <= self.now and self.assistant.ctx.logical_day(at) == self.assistant.ctx.logical_day(self.now)):
-            raise ValueError(f"pick a time earlier today, up to {self.now:%H:%M}")
+        if self.assistant.ctx.logical_day(at) != self.assistant.ctx.logical_day(self.now):
+            raise ValueError("pick a time today")
         self.log_sources[(action, at)] = source
-        self.assistant.log(action, at)
+        if at > self.now:
+            self.assistant.plan_record(action, at)
+        else:
+            self.assistant.log(action, at)
         return self._flush()
 
     def change_plan(self, body: dict) -> None:
@@ -344,11 +347,11 @@ class Simulation:
     def _records(self, reports: list[ContractReport], day: date) -> list[dict]:
         """Today's records, flagged when a goal row already shows them (so the timeline never shows them twice)."""
         shown = {(a, r.hit_at) for rep in reports for r in rep.results if r.hit_at for a in r.rule.actions}
-        ctx = self.assistant.ctx
-        return [{"action": e.action, "label": self.assistant.actions[e.action], "at": f"{e.at:%H:%M}",
-                 "sort": e.at.isoformat(), "source": self.log_sources.get((e.action, e.at), "you" if self.live else "history"),
-                 "on_goal": (e.action, e.at) in shown}
-                for e in self.assistant.events if ctx.logical_day(e.at) == day]
+        ctx, a = self.assistant.ctx, self.assistant
+        return [{"action": e.action, "label": a.actions[e.action], "at": f"{e.at:%H:%M}", "sort": e.at.isoformat(),
+                 "source": self.log_sources.get((e.action, e.at), "you" if self.live else "history"),
+                 "on_goal": (e.action, e.at) in shown, "planned": e in a.planned, "goal": e.goal}
+                for e in [*a.events, *a.planned] if ctx.logical_day(e.at) == day]
 
     def _assistant_settings(self) -> dict:
         """Current tone plus a preview of the same reminder in every tone."""

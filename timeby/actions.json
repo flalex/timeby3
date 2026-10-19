@@ -16,5 +16,9 @@
   "marketing_work": "Marketing work",
   "water": "Glass of water",
   "vegetables": "Vegetables with a meal",
-  "protein_meal": "Protein-rich meal"
+  "protein_meal": "Protein-rich meal",
+  "work_start": "Started work",
+  "work_end": "Finished work",
+  "work_break": "Break away from the screen (10+ min)",
+  "work_after_hours": "Work email or messages after hours"
 }

@@ -2,34 +2,238 @@
   "id": "business",
   "name": "Business",
   "domain": "business",
-  "context_hint": "Current priorities and deadlines, meetings pattern, what development and marketing work is on now.",
-  "goal": "Protect a daily focused block for development and a fixed slot for marketing.",
+  "context_hint": "Your job and its hours, current priorities and deadlines, meetings pattern, what you're building on the side.",
+  "goal": "A healthy working week: a protected focus block, a regular marketing slot and a full-time job that ends on time.",
   "sources": {
     "mark2008": "Mark G, Gudith D, Klocke U. The cost of interrupted work: more speed and stress. Proc CHI, 2008.",
     "ericsson1993": "Ericsson KA, Krampe RT, Tesch-Römer C. The role of deliberate practice in the acquisition of expert performance. Psychol Rev, 1993.",
-    "lally2010": "Lally P, van Jaarsveld CHM, Potts HWW, Wardle J. How are habits formed: modelling habit formation in the real world. Eur J Soc Psychol, 2010."
+    "lally2010": "Lally P, van Jaarsveld CHM, Potts HWW, Wardle J. How are habits formed: modelling habit formation in the real world. Eur J Soc Psychol, 2010.",
+    "kecklund2016": "Kecklund G, Axelsson J. Health consequences of shift work and insufficient sleep. BMJ, 2016.",
+    "albulescu2022": "Albulescu P, Macsinga I, Rusu A, Sulea C, Bodnaru A, Tulbure BT. 'Give me a break!' A systematic review and meta-analysis on the efficacy of micro-breaks for increasing well-being and performance. PLoS One, 2022.",
+    "kivimaki2015": "Kivimäki M et al. Long working hours and risk of coronary heart disease and stroke: a systematic review and meta-analysis of published and unpublished data for 603 838 individuals. Lancet, 2015.",
+    "sonnentag2015": "Sonnentag S, Fritz C. Recovery from job stress: the stressor-detachment model as an integrative framework. J Organ Behav, 2015."
   },
   "phases": [
-    {"id": "work", "goal": "Focused work first, outward work after lunch", "window": {"anchor": "wake", "start": 60, "end": 660}}
+    {
+      "id": "work",
+      "goal": "Focused work first, outward work after lunch",
+      "window": {
+        "anchor": "wake",
+        "start": 60,
+        "end": 660
+      }
+    }
   ],
   "rules": [
     {
-      "id": "development", "title": "Focused development block", "weekly_target": 5, "weekly_why": "Five protected focus blocks a week carry most of the week's real progress.", "label": "Development", "duration": 120,
-      "phase": "work", "kind": "do", "actions": ["dev_work"], "window": {"anchor": "wake", "start": 120, "end": 300},
-      "weight": 3, "strength": "moderate",
+      "id": "development",
+      "title": "Focused development block",
+      "weekly_target": 5,
+      "weekly_why": "Five protected focus blocks a week carry most of the week's real progress.",
+      "label": "Development",
+      "duration": 120,
+      "phase": "work",
+      "kind": "do",
+      "actions": [
+        "dev_work"
+      ],
+      "window": {
+        "anchor": "wake",
+        "start": 120,
+        "end": 300
+      },
+      "weight": 3,
+      "strength": "moderate",
       "why": "Interruptions raise stress and time pressure; experts do their hardest practice in limited, protected morning sessions.",
       "advice": "Two hours of development with notifications off.",
-      "sources": ["mark2008", "ericsson1993"],
-      "nudge": {"at": 115, "text": "Focused block starts in 5 minutes: development. Notifications off."}
+      "sources": [
+        "mark2008",
+        "ericsson1993"
+      ],
+      "nudge": {
+        "at": 115,
+        "text": "Focused block starts in 5 minutes: development. Notifications off."
+      },
+      "topic": "Own business"
     },
     {
-      "id": "marketing", "title": "Marketing slot", "weekly_target": 4, "weekly_why": "Marketing compounds when it is frequent: at least four slots a week.", "label": "Marketing", "duration": 60,
-      "phase": "work", "kind": "do", "actions": ["marketing_work"], "window": {"anchor": "lunch", "start": 60, "end": 240},
-      "weight": 2, "strength": "emerging",
+      "id": "marketing",
+      "title": "Marketing slot",
+      "weekly_target": 4,
+      "weekly_why": "Marketing compounds when it is frequent: at least four slots a week.",
+      "label": "Marketing",
+      "duration": 60,
+      "phase": "work",
+      "kind": "do",
+      "actions": [
+        "marketing_work"
+      ],
+      "window": {
+        "anchor": "lunch",
+        "start": 60,
+        "end": 240
+      },
+      "weight": 2,
+      "strength": "emerging",
       "why": "Doing the same task in the same slot every day makes it automatic faster than doing it whenever there is time.",
       "advice": "One hour of marketing after lunch.",
-      "sources": ["lally2010"],
-      "nudge": {"at": 55, "text": "Marketing slot in 5 minutes."}
+      "sources": [
+        "lally2010"
+      ],
+      "nudge": {
+        "at": 55,
+        "text": "Marketing slot in 5 minutes."
+      },
+      "topic": "Own business"
+    },
+    {
+      "id": "start_work",
+      "title": "Start work at the usual time",
+      "label": "Start work",
+      "topic": "Full-time job (9–5)",
+      "days": [
+        "mon",
+        "tue",
+        "wed",
+        "thu",
+        "fri"
+      ],
+      "weekly_target": 4,
+      "weekly_why": "Four regular starts out of five keep the working day anchored.",
+      "phase": "work",
+      "kind": "regularity",
+      "actions": [
+        "work_start"
+      ],
+      "window": {
+        "anchor": "work_start",
+        "start": -90,
+        "end": 120
+      },
+      "tolerance": 15,
+      "lookback_days": 7,
+      "weight": 2,
+      "strength": "emerging",
+      "why": "A fixed start anchors the working day and protects the evening; irregular working hours are linked with shorter sleep and worse health.",
+      "advice": "Start at your usual time.",
+      "sources": [
+        "kecklund2016"
+      ],
+      "nudge": {
+        "at": -15,
+        "text": "Work starts in 15 minutes."
+      }
+    },
+    {
+      "id": "work_break",
+      "title": "Break away from the screen",
+      "label": "Afternoon break",
+      "topic": "Full-time job (9–5)",
+      "days": [
+        "mon",
+        "tue",
+        "wed",
+        "thu",
+        "fri"
+      ],
+      "weekly_target": 3,
+      "duration": 10,
+      "weekly_why": "A real break on most workdays.",
+      "phase": "work",
+      "kind": "do",
+      "actions": [
+        "work_break"
+      ],
+      "window": {
+        "anchor": "work_start",
+        "start": 240,
+        "end": 360
+      },
+      "weight": 1,
+      "strength": "moderate",
+      "why": "Short breaks during work raise vigour and reduce fatigue (meta-analysis of micro-break studies).",
+      "advice": "10 minutes away from the screen — walk, stretch or step outside.",
+      "sources": [
+        "albulescu2022"
+      ],
+      "nudge": {
+        "at": 270,
+        "text": "Take 10 minutes away from the screen — it pays back in focus."
+      }
+    },
+    {
+      "id": "finish_work",
+      "title": "Finish work on time",
+      "label": "Finish on time",
+      "topic": "Full-time job (9–5)",
+      "days": [
+        "mon",
+        "tue",
+        "wed",
+        "thu",
+        "fri"
+      ],
+      "weekly_target": 4,
+      "weekly_why": "Long hours are the risk: finish on time on at least four days.",
+      "phase": "work",
+      "kind": "regularity",
+      "actions": [
+        "work_end"
+      ],
+      "window": {
+        "anchor": "work_end",
+        "start": -120,
+        "end": 240
+      },
+      "tolerance": 30,
+      "lookback_days": 7,
+      "weight": 2,
+      "strength": "strong",
+      "why": "Regularly working long hours (55+ a week) is linked to a higher risk of stroke and coronary heart disease than standard hours.",
+      "advice": "Wrap up and log off at your usual time.",
+      "sources": [
+        "kivimaki2015"
+      ],
+      "nudge": {
+        "at": -15,
+        "text": "15 minutes to the end of your working day — start wrapping up."
+      }
+    },
+    {
+      "id": "switch_off",
+      "title": "Switch off after work",
+      "label": "Switch off after work",
+      "topic": "Full-time job (9–5)",
+      "days": [
+        "mon",
+        "tue",
+        "wed",
+        "thu",
+        "fri"
+      ],
+      "weekly_target": 4,
+      "weekly_why": "Most evenings free of work messages.",
+      "phase": "work",
+      "kind": "avoid",
+      "actions": [
+        "work_after_hours"
+      ],
+      "window": {
+        "anchor": "work_end",
+        "start": 60,
+        "end": 360
+      },
+      "weight": 2,
+      "strength": "moderate",
+      "why": "Mentally detaching from work in the evening is central to recovery; staying connected predicts exhaustion the next day.",
+      "advice": "No work email or messages tonight.",
+      "sources": [
+        "sonnentag2015"
+      ],
+      "nudge": {
+        "at": 60,
+        "text": "Work's done — notifications off for the evening."
+      }
     }
   ]
 }

@@ -153,6 +153,13 @@ body.live .demo-only { display: none !important; }
 .menu[hidden] { display: none; }
 .menu button { border: 0; background: none; text-align: left; padding: 8px 10px; border-radius: 8px; font-size: 14px; display: flex; gap: 8px; }
 .menu button:hover { background: var(--surface-2); }
+.menu .when { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 10px 8px;
+  font-size: 13px; color: var(--muted); border-bottom: 1px solid var(--line); margin-bottom: 4px; }
+.menu .when input { font: inherit; font-size: 14px; color: var(--ink); background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; padding: 4px 6px; }
+.row.past.rec { opacity: .85; }
+.mark.rec { background: var(--surface-2); border: 1.5px solid var(--line); }
+.row.future.skipped > :not(.linkbtn) { opacity: .6; }
+.row[data-plan] { cursor: pointer; }
 
 /* ---------- Today ---------- */
 .ring { width: 44px; height: 44px; flex: none; transform: rotate(-90deg); }
@@ -243,6 +250,7 @@ body.live .demo-only { display: none !important; }
 .fold .stack { display: flex; }
 .fold .stack i { width: 10px; height: 10px; border-radius: 50%; margin-right: -3px; border: 2px solid var(--surface); background: var(--accent); }
 .fold .stack i.bad { background: var(--bad); }
+.fold .stack i.rec { background: var(--faint); }
 .fold:hover { color: var(--ink); }
 .nowline { display: flex; align-items: center; gap: 10px; padding: 10px 0 8px; }
 .nowline .pill { font: 700 12px ui-monospace, Menlo, monospace; color: var(--accent-ink); background: var(--accent); border-radius: 999px; padding: 2px 9px; }
@@ -430,10 +438,12 @@ async function post(op, body) {
 }
 const ICONS = { wake: "⏰", sunlight: "☀️", bright_light: "💡", screen_bright: "📱", caffeine: "☕",
   exercise_light: "🚶", exercise_intense: "🏋️", wind_down: "🧘", meal: "🍽️", snack: "🍪", sleep: "🌙",
-  surf: "🏄", padel: "🎾", dev_work: "💻", marketing_work: "📣", water: "💧", vegetables: "🥗", protein_meal: "🥚" };
+  surf: "🏄", padel: "🎾", dev_work: "💻", marketing_work: "📣", water: "💧", vegetables: "🥗", protein_meal: "🥚",
+  work_start: "💼", work_end: "🏁", work_break: "🧍", work_after_hours: "📨" };
 const SHORT = { caffeine: "Coffee", meal: "Meal", snack: "Snack", sunlight: "Daylight", exercise_light: "Walk",
   exercise_intense: "Workout", surf: "Surf", padel: "Padel", dev_work: "Development", marketing_work: "Marketing",
-  water: "Water", vegetables: "Vegetables", protein_meal: "Protein", screen_bright: "Screens", wind_down: "Wind down" };
+  water: "Water", vegetables: "Vegetables", protein_meal: "Protein", work_start: "Started work", work_break: "Work break",
+  work_end: "Finished work", work_after_hours: "Work messages", screen_bright: "Screens", wind_down: "Wind down" };
 const DAY_SHORT = { mon: "Mon", tue: "Tue", wed: "Wed", thu: "Thu", fri: "Fri", sat: "Sat", sun: "Sun" };
 const DONE_LABEL = { wake: "I'm up", sleep: "Going to bed", meal: "Eating now" };
 const PROACTIVE = new Set(["nudge", "last_call", "brief", "recap", "recovery"]);
@@ -732,19 +742,66 @@ let withBusy = (items, toRows) => items.flatMap(toRows);  // calendar.js replace
 function timelineSection(t) {
   const ls = t.late_start;
   const untracked = t.earlier.filter((i) => i.tone === "none");
-  const past = t.earlier.filter((i) => i.tone !== "none" && !(ls && i.cause === "late_start"));
-  const keepOpen = past.findIndex((i) => i.rule_id === editing);
+  const goals = t.earlier.filter((i) => i.tone !== "none" && !(ls && i.cause === "late_start"));
+  const past = [...goals, ...ownRecords()].sort((x, y) => (x.sort < y.sort ? -1 : x.sort > y.sort ? 1 : 0));
+  const keepOpen = past.findIndex((i) => editKey(i) === editing);
   const foldCount = showAllEarlier ? 0 : Math.max(0, past.length - PAST_VISIBLE);
   const folded = past.slice(0, keepOpen >= 0 ? Math.min(foldCount, keepOpen) : foldCount);
   const rows = [];
   if (t.tracking && untracked.length) rows.push(...untrackedRows(t.tracking, untracked));
   if (folded.length) rows.push(foldRow(folded));
-  rows.push(...withBusy(past.slice(folded.length), (i) => i.root && ls ? lateStartRows(i, ls, t.earlier) : [pastRow(i)], "past"));
+  rows.push(...withBusy(past.slice(folded.length), (i) => i.type === "record" ? [recordRow(i)]
+    : i.root && ls ? lateStartRows(i, ls, t.earlier) : [pastRow(i)], "past"));
   rows.push(`<div class="nowline" title="Now"><span class="pill num">${S.clock}</span></div>`);
   rows.push(...withBusy(upcoming(t), (i) => [i.slot === "later" ? futureRow(i) : currentRow(i, i === t.now.hero)],
     "upcoming", (i) => dayMin(shownTime(i))));
+  rows.push(...skippedRows());
   if (t.tomorrow) rows.push(tomorrowRows(t.tomorrow));
   return `<div class="timeline">${rows.join("")}</div>`;
+}
+
+// --- the owner's own records: every log shows up, and can be moved or deleted ---
+const recordKey = (r) => `rec:${r.action}@${r.at}`;
+const editKey = (i) => (i.type === "record" ? recordKey(i) : i.rule_id);
+
+/** Records no goal row already shows (e.g. surfing on a Monday, a coffee before the cut-off). */
+function ownRecords() {
+  return (S.records || []).filter((r) => !r.on_goal).map((r) => ({ ...r, type: "record", title: SHORT[r.action] || r.label, tone: "rec" }));
+}
+
+function recordRow(r) {
+  const open = editing === recordKey(r);
+  return `<div class="row past rec ${open ? "editing" : ""}" data-edit-rec="${recordKey(r)}" title="Click to change the time or delete">
+    ${timeCell(r.at, r)}<span class="mark rec">${ICONS[r.action] || "•"}</span>
+    <span class="name"><span>${esc(r.title)}</span><span class="dur">your record</span></span><span class="meta">${esc(r.source)}</span></div>
+    ${open ? `<div class="editor" id="rec-editor">
+      <div class="fields"><label>Time <input type="time" id="rec-at" value="${r.at}" max="${S.clock}"></label></div>
+      <div class="ed-err" id="rec-err" hidden></div>
+      <div class="acts"><button class="btn primary" id="rec-save">Save</button><button class="btn secondary" id="rec-delete">Delete</button>
+        <button class="btn secondary" id="rec-cancel">Cancel</button></div></div>` : ""}`;
+}
+
+// --- upcoming goals: move to another time today, or take off today's plan ---
+const planKey = (i) => `plan:${i.rule_id}`;
+
+function planEditor(i) {
+  const moved = S.plan_changes?.[i.rule_id];
+  return `<div class="editor" id="plan-editor" data-cid="${i.contract_id}" data-rid="${i.rule_id}">
+    <div class="fields"><label>Move to <input type="time" id="plan-at" value="${shownTime(i)}" min="${S.clock}"></label>
+      <span class="ed-hint">today only — your usual plan stays the same</span></div>
+    <div class="ed-err" id="plan-err" hidden></div>
+    <div class="acts"><button class="btn primary" id="plan-move">Move</button><button class="btn secondary" id="plan-skip">Skip today</button>
+      ${moved ? `<button class="btn secondary" id="plan-restore">Back to usual time</button>` : ""}
+      <button class="btn secondary" id="plan-cancel">Cancel</button></div></div>`;
+}
+
+function skippedRows() {
+  const skipped = Object.entries(S.plan_changes || {}).filter(([, minutes]) => minutes === null).map(([rid]) => rid);
+  const goals = S.agents.flatMap((a) => a.goals.map((g) => ({ ...g, contract_id: a.id })));
+  return skipped.map((rid) => goals.find((g) => g.id === rid)).filter(Boolean).map((g) => `<div class="row future skipped">
+    <span class="t num soft">today</span><span class="mark skip">${ICONS[g.action] || "•"}</span>
+    <span class="name"><span>${esc(g.label)}</span><span class="dur">skipped today</span></span>
+    <button class="linkbtn" data-restore="${g.id}" data-cid="${g.contract_id}">Restore</button></div>`);
 }
 
 // --- durations (three styles to compare) ---
@@ -761,10 +818,12 @@ const comment = (i) => i.comment ? `<span class="cmt" title="${esc(i.comment)}">
 const nameCell = (i) => `<span class="name"><span>${esc(i.title)}</span>${comment(i)}${durationTag(i)}</span>`;
 
 function foldRow(items) {
-  const missed = items.filter((i) => i.tone === "bad").length;
-  const dots = items.map((i) => `<i class="${i.tone === "bad" ? "bad" : ""}"></i>`).join("");
+  const count = (pred) => items.filter(pred).length;
+  const missed = count((i) => i.tone === "bad"), records = count((i) => i.type === "record");
+  const parts = [`${items.length - missed - records} done`, missed && `${missed} missed`, records && `${records} your record${records > 1 ? "s" : ""}`];
+  const dots = items.map((i) => `<i class="${i.tone === "bad" ? "bad" : i.type === "record" ? "rec" : ""}"></i>`).join("");
   return `<button class="fold" id="toggle-earlier"><span class="t num">${items[0].at}</span><span class="stack">${dots}</span>
-    <span>${items.length} earlier · ${items.length - missed} done${missed ? `, ${missed} missed` : ""}</span><span>Show</span></button>`;
+    <span>${items.length} earlier · ${parts.filter(Boolean).join(", ")}</span><span>Show</span></button>`;
 }
 
 const MARKS = { good: ["ok", "✓"], bad: ["no", "✕"], late: ["half", "◐"], skip: ["skip", "–"], none: ["skip", "·"] };
@@ -817,17 +876,18 @@ function currentRow(c, isFocus) {
     return `<div class="row current limit">${timeCell("now", c, "soft")}<span class="mark limit">${ICONS[c.action] || ""}</span>
       ${nameCell(c)}<span class="meta">until ${c.until}</span></div>`;
   }
-  return `<div class="row current ${isFocus ? "focus" : ""} ${c.late ? "late" : ""}">${timeCell(`by ${c.by}`, c, "soft")}
+  return `<div class="row current ${isFocus ? "focus" : ""} ${c.late ? "late" : ""}" data-plan="${c.rule_id}" title="Click to move or skip today">${timeCell(`by ${c.by}`, c, "soft")}
     <button class="mark todo" data-log="${c.action}" title="Mark done">${ICONS[c.action] || ""}</button>
-    ${nameCell(c)}<span class="meta">${c.late ? "late · " : ""}${c.minutes_left} min left</span></div>`;
+    ${nameCell(c)}<span class="meta">${c.late ? "late · " : ""}${c.minutes_left} min left</span></div>${editing === planKey(c) ? planEditor(c) : ""}`;
 }
 
 function futureRow(i) {
   const avoid = i.kind === "avoid";
   const mark = avoid ? `<span class="mark limit">${ICONS[i.action] || ""}</span>`
     : `<button class="mark todo" data-log="${i.action}" title="Done early">${ICONS[i.action] || ""}</button>`;
-  return `<div class="row future ${avoid ? "limit" : ""}">${timeCell(i.time, i)}${mark}
-    ${nameCell(i)}<span class="meta">${avoid && i.until ? `until ${i.until}` : ""}</span></div>`;
+  const moved = S.plan_changes?.[i.rule_id] ? `<span class="dur">moved</span>` : "";
+  return `<div class="row future ${avoid ? "limit" : ""}" data-plan="${i.rule_id}" title="Click to move or skip today">${timeCell(i.time, i)}${mark}
+    ${nameCell(i)}<span class="meta">${moved}${avoid && i.until ? `until ${i.until}` : ""}</span></div>${editing === planKey(i) ? planEditor(i) : ""}`;
 }
 
 function tomorrowRows(w) {
@@ -847,7 +907,11 @@ function bindToday() {
   v.querySelectorAll("[data-reply]").forEach((b) => b.addEventListener("click", () => {
     const h = S.today.now.hero; api("reply", { op: b.dataset.reply, contract_id: h.contract_id, rule_id: h.rule_id });
   }));
-  v.querySelectorAll("[data-log]").forEach((b) => b.addEventListener("click", () => api("log", { action: b.dataset.log })));
+  v.querySelectorAll("[data-log]").forEach((b) => b.addEventListener("click", (e) => { e.stopPropagation(); logNow(b.dataset.log); }));
+  v.querySelectorAll("[data-plan]").forEach((row) => row.addEventListener("click", () => toggleEditor(`plan:${row.dataset.plan}`)));
+  v.querySelectorAll("[data-edit-rec]").forEach((row) => row.addEventListener("click", () => toggleEditor(row.dataset.editRec)));
+  v.querySelectorAll("[data-restore]").forEach((b) => b.addEventListener("click", () =>
+    changePlan({ contract_id: b.dataset.cid, rule_id: b.dataset.restore, action: "restore" })));
   v.querySelector("#done-both")?.addEventListener("click", async () => {
     const h = S.today.now.hero, partner = h.pair;
     await api("reply", { op: "done", contract_id: h.contract_id, rule_id: h.rule_id });
@@ -856,12 +920,71 @@ function bindToday() {
   v.querySelector("#late-start")?.addEventListener("click", () => { lateOpen = !lateOpen; renderToday(); });
   v.querySelector("#untracked-toggle")?.addEventListener("click", () => { untrackedOpen = !untrackedOpen; renderToday(); });
   v.querySelector("#tomorrow")?.addEventListener("click", () => { tomorrowOpen = !tomorrowOpen; renderToday(); });
-  v.querySelectorAll("[data-edit]").forEach((row) => row.addEventListener("click", () => {
-    editing = editing === row.dataset.edit ? null : row.dataset.edit;
-    setPlaying(false);
-    renderToday();
-  }));
+  v.querySelectorAll("[data-edit]").forEach((row) => row.addEventListener("click", () => toggleEditor(row.dataset.edit)));
   bindEditor();
+  bindRecordEditor();
+  bindPlanEditor();
+}
+
+function toggleEditor(key) {
+  editing = editing === key ? null : key;
+  setPlaying(false);
+  renderToday();
+}
+
+/** Runs one change; on success re-renders, on refusal shows the reason inside the open editor. */
+async function applyChange(op, body, errorBox) {
+  try {
+    const data = await post(op, body);
+    editing = null;
+    S = data.state;
+    render();
+    return true;
+  } catch (err) {
+    if ($(errorBox)) { $(errorBox).hidden = false; $(errorBox).textContent = err.message; }
+    else showToast({ kind: "info", at: S.clock, text: err.message });
+    return false;
+  }
+}
+
+function bindRecordEditor() {
+  if (!$("rec-editor")) return;
+  const r = ownRecords().find((x) => recordKey(x) === editing);
+  const record = { action: r.action, at: r.at };
+  $("rec-cancel").onclick = () => toggleEditor(editing);
+  $("rec-save").onclick = async () => (await applyChange("record", { action: "move", record, to: $("rec-at").value }, "rec-err"))
+    && logControl("Record moved", `${r.title} → ${$("rec-at")?.value || ""}`);
+  $("rec-delete").onclick = async () => (await applyChange("record", { action: "delete", record }, "rec-err"))
+    && logControl("Record deleted", `${r.title} ${r.at}`);
+}
+
+function changePlan(body) {
+  return applyChange("plan", body, "plan-err");
+}
+
+function bindPlanEditor() {
+  const ed = $("plan-editor");
+  if (!ed) return;
+  const { cid, rid } = ed.dataset;
+  $("plan-cancel").onclick = () => toggleEditor(editing);
+  $("plan-move").onclick = () => changePlan({ contract_id: cid, rule_id: rid, action: "move", at: $("plan-at").value });
+  $("plan-skip").onclick = () => changePlan({ contract_id: cid, rule_id: rid, action: "skip" });
+  if ($("plan-restore")) $("plan-restore").onclick = () => changePlan({ contract_id: cid, rule_id: rid, action: "restore" });
+}
+
+// --- + Log: any action, now or earlier today, always confirmed ---
+async function logNow(action, at = null) {
+  const body = at && at !== S.clock ? { action, at } : { action };
+  try {
+    const data = await post("log", body);
+    S = data.state;
+    route(data.messages, "log");
+    render();
+    showToast({ kind: "info", at: S.clock, text: `Logged ${ICONS[action] || ""} ${SHORT[action] || action} at ${body.at || S.clock}.` });
+    logControl("Logged", `${SHORT[action] || action} ${body.at || S.clock}`);
+  } catch (err) {
+    showToast({ kind: "info", at: S.clock, text: err.message });
+  }
 }
 
 function bindEditor() {
@@ -914,10 +1037,16 @@ $("ltabs").querySelectorAll("button").forEach((b) => (b.onclick = () => { ltab =
 $("viewseg").querySelectorAll("button").forEach((b) => (b.onclick = () => setView(b.dataset.view)));
 $("scenario").onchange = () => restart();
 $("toast").onclick = () => $("toast").classList.remove("show");
-$("menu").innerHTML = Object.entries(SHORT).map(([a, label]) => `<button data-a="${a}">${ICONS[a]} ${label}</button>`).join("");
-$("log-btn").onclick = (e) => { e.stopPropagation(); $("menu").hidden = !$("menu").hidden; };
+$("menu").innerHTML = `<label class="when">When <input type="time" id="log-at"></label>` +
+  Object.entries(SHORT).map(([a, label]) => `<button data-a="${a}">${ICONS[a]} ${label}</button>`).join("");
+$("log-btn").onclick = (e) => {
+  e.stopPropagation();
+  $("menu").hidden = !$("menu").hidden;
+  if (!$("menu").hidden) { $("log-at").value = S.clock; $("log-at").max = S.clock; }
+};
+$("menu").onclick = (e) => e.stopPropagation();  // picking a time must not close the menu
 document.addEventListener("click", () => ($("menu").hidden = true));
-$("menu").querySelectorAll("button").forEach((b) => (b.onclick = () => api("log", { action: b.dataset.a })));
+$("menu").querySelectorAll("button").forEach((b) => (b.onclick = () => { $("menu").hidden = true; logNow(b.dataset.a, $("log-at").value); }));
 $("suggest").innerHTML = ["What should I do now?", "How am I doing?", "Why?"].map((q) => `<button>${q}</button>`).join("");
 $("suggest").querySelectorAll("button").forEach((b) => (b.onclick = () => api("say", { text: b.textContent })));
 $("form").onsubmit = (e) => { e.preventDefault(); const t = $("text").value.trim(); if (t) { $("text").value = ""; api("say", { text: t }); } };

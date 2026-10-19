@@ -13,7 +13,7 @@ from pathlib import Path
 
 from .assistant import Assistant
 from .model import Event
-from .personal import DAY_ORDER, parse_times
+from .personal import ANCHORS, parse_times
 
 DEFAULT_DIR = Path(os.environ.get("TIMEBY_DATA_DIR") or Path(__file__).resolve().parent.parent / "data" / "live")
 SETTINGS = "settings.json"
@@ -41,7 +41,7 @@ class LiveStore:
 
     def _settings(self, a: Assistant) -> dict:
         return {
-            "profile": {name: f"{a.profile.anchors[name].time:%H:%M}" for name in DAY_ORDER},
+            "profile": {name: f"{a.profile.anchors[name].time:%H:%M}" for name in ANCHORS},
             "day_overrides": {_key(*k): list(v) for k, v in a.day_overrides.items()},
             "disabled_agents": sorted(a.disabled_contracts),
             "disabled_goals": sorted(_key(*k) for k in a.disabled_rules),
@@ -60,6 +60,7 @@ class LiveStore:
             "delivered": on_day(a.delivered),
             "skipped": on_day(a.skipped),
             "tracking_from": a.tracked_from[day].isoformat(timespec="minutes") if day in (a.tracked_from or {}) else None,
+            "plan_changes": {rid: minutes for (d, rid), minutes in a.plan_changes.items() if d == day},
         }
 
     def _write(self, name: str, payload: dict) -> None:
@@ -82,8 +83,9 @@ class LiveStore:
 
     @staticmethod
     def _restore_settings(a: Assistant, s: dict) -> None:
-        if s.get("profile"):
-            a.set_profile(parse_times(s["profile"]))
+        if s.get("profile"):  # saved before newer times existed (e.g. work hours): keep the defaults for those
+            current = {name: f"{a.profile.anchors[name].time:%H:%M}" for name in ANCHORS}
+            a.set_profile(parse_times(current | s["profile"]))
         a.day_overrides = {_unkey(k): tuple(v) for k, v in s.get("day_overrides", {}).items()}
         a.disabled_contracts = set(s.get("disabled_agents", []))
         a.disabled_rules = {_unkey(k) for k in s.get("disabled_goals", [])}
@@ -98,5 +100,6 @@ class LiveStore:
         a.sent |= {(day, *k) for k in map(tuple, d.get("sent", []))}
         a.delivered |= {(day, *k) for k in map(tuple, d.get("delivered", []))}
         a.skipped |= {(day, *k) for k in map(tuple, d.get("skipped", []))}
+        a.plan_changes |= {(day, rid): minutes for rid, minutes in d.get("plan_changes", {}).items()}
         if d.get("tracking_from") and a.tracked_from is not None:
             a.tracked_from[day] = datetime.fromisoformat(d["tracking_from"])

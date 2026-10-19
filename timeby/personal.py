@@ -8,7 +8,11 @@ from .model import Profile
 from .sleep_plan import MIN_SLEEP
 
 DAY_ORDER = ("wake", "breakfast", "lunch", "dinner", "sleep")
-LABELS = {"wake": "Wake-up", "breakfast": "Breakfast", "lunch": "Lunch", "dinner": "Dinner", "sleep": "Lights out"}
+WORK = ("work_start", "work_end")  # the working day of a full-time job
+ANCHORS = DAY_ORDER + WORK
+LABELS = {"wake": "Wake-up", "breakfast": "Breakfast", "lunch": "Lunch", "dinner": "Dinner", "sleep": "Lights out",
+          "work_start": "Work start", "work_end": "Work end"}
+WORK_SPAN = (timedelta(hours=4), timedelta(hours=12))
 MEALS = ("breakfast", "lunch", "dinner")
 MIN_AWAKE = timedelta(hours=6)
 MIN_MEAL_GAP = timedelta(hours=2)
@@ -21,20 +25,20 @@ class DayCheck:
 
 
 def parse_times(raw: dict[str, str]) -> dict[str, time]:
-    """HH:MM strings → times, for exactly the five day anchors."""
-    missing = [LABELS[name] for name in DAY_ORDER if not raw.get(name)]
+    """HH:MM strings → times, for every anchor of the day."""
+    missing = [LABELS[name] for name in ANCHORS if not raw.get(name)]
     if missing:
         raise ValueError(f"Missing time: {', '.join(missing)}.")
     try:
-        return {name: time.fromisoformat(raw[name]) for name in DAY_ORDER}
+        return {name: time.fromisoformat(raw[name]) for name in ANCHORS}
     except ValueError:
         raise ValueError("Times must be HH:MM, e.g. 07:00.") from None
 
 
 def check_day(times: dict[str, time], day_start: time) -> DayCheck:
     """Order, awake span and meal spacing are hard rules; a short night only warns (AASM 7 h minimum)."""
-    offset = {name: _since(times[name], day_start) for name in DAY_ORDER}
-    errors = [*_order_errors(offset), *_span_errors(offset)]
+    offset = {name: _since(times[name], day_start) for name in ANCHORS}
+    errors = [*_order_errors(offset), *_span_errors(offset), *_work_errors(offset)]
     return DayCheck(tuple(errors), () if errors else _sleep_warnings(offset))
 
 
@@ -63,6 +67,15 @@ def _span_errors(offset: dict[str, timedelta]) -> list[str]:
                for earlier, later in zip(MEALS, MEALS[1:])
                if timedelta(0) < offset[later] - offset[earlier] < MIN_MEAL_GAP]
     return errors
+
+
+def _work_errors(offset: dict[str, timedelta]) -> list[str]:
+    span = offset["work_end"] - offset["work_start"]
+    if not WORK_SPAN[0] <= span <= WORK_SPAN[1]:
+        return ["Work end must be 4–12 h after work start."]
+    if offset["work_start"] < offset["wake"] or offset["work_end"] > offset["sleep"]:
+        return ["The working day must fit between wake-up and lights out."]
+    return []
 
 
 def _sleep_warnings(offset: dict[str, timedelta]) -> tuple[str, ...]:

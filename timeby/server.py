@@ -5,6 +5,7 @@ import json
 import threading
 from datetime import date, datetime, time, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from importlib.util import find_spec
 from pathlib import Path
 
 from . import calendar_feed, calendar_ics
@@ -13,8 +14,9 @@ from .demo import PROFILE, seed_history
 from .loader import load_actions, load_contracts
 from .model import ContractReport, Message, RuleKind, RuleResult, Status
 from .connectors import CONNECTORS
-from .ai import RECOMMENDERS, AiUnavailable, facts_for
-from .personal import DAY_ORDER, LABELS, parse_times
+from .ai import RECOMMENDERS, AiUnavailable, facts_for, use_key_source
+from .keystore import KeyStore
+from .personal import ANCHORS, LABELS, parse_times
 from .storage import LiveStore
 from .telegram import TelegramChannel, TelegramError
 from .tone import TONES, style
@@ -137,10 +139,38 @@ class Simulation:
         minutes = int((datetime.now() - self.now).total_seconds() // 60)
         return self.advance(minutes, stop_on_agent=False) if minutes > 0 else []
 
-    def log(self, action: str, source: str = "you") -> list[dict]:
-        self.log_sources[(action, self.now)] = source
-        self.assistant.log(action, self.now)
+    def log(self, action: str, source: str = "you", at: datetime | None = None) -> list[dict]:
+        """Record an action now, or earlier today ("I had it at…")."""
+        at = at or self.now
+        if not (at <= self.now and self.assistant.ctx.logical_day(at) == self.assistant.ctx.logical_day(self.now)):
+            raise ValueError(f"pick a time earlier today, up to {self.now:%H:%M}")
+        self.log_sources[(action, at)] = source
+        self.assistant.log(action, at)
         return self._flush()
+
+    def change_plan(self, body: dict) -> None:
+        """Owner reshapes today: move an upcoming goal, take it off today, or put it back."""
+        cid, rid, action = body["contract_id"], body["rule_id"], body["action"]
+        if action == "move":
+            self.assistant.move_goal(cid, rid, self._at_today(body["at"]), self.now)
+        elif action == "skip":
+            self.assistant.skip_goal(cid, rid, self.now)
+        elif action == "restore":
+            self.assistant.restore_goal(rid, self.now)
+        else:
+            raise KeyError(action)
+
+    def change_record(self, body: dict) -> None:
+        """Owner fixes their own record: move it to another time today, or delete it."""
+        action, at = body["record"]["action"], self._at_today(body["record"]["at"])
+        if body["action"] == "move":
+            to = self._at_today(body["to"])
+            self.assistant.move_record(action, at, to, self.now)
+            self.log_sources[(action, to)] = self.log_sources.pop((action, at), "you")
+        elif body["action"] == "delete":
+            self.assistant.delete_record(action, at)
+        else:
+            raise KeyError(body["action"])
 
     def say(self, text: str) -> list[dict]:
         self.assistant.answer(text, self.now)
@@ -168,7 +198,9 @@ class Simulation:
         self.assistant.annotate(cid, rid, self.now, duration, body.get("comment", ""))
 
     def set_profile(self, anchors: dict[str, str]) -> None:
-        self.assistant.set_profile(parse_times(anchors))
+        """New times for some or all anchors; the rest stay as they are."""
+        current = {name: f"{a.time:%H:%M}" for name, a in self.assistant.profile.anchors.items()}
+        self.assistant.set_profile(parse_times(current | anchors))
         self.profile = self.assistant.profile
 
     def set_days(self, contract_id: str, rule_id: str, days: list[str]) -> None:
@@ -278,6 +310,8 @@ class Simulation:
                         "source": self.log_sources.get((e.action, e.at), "history")}
                        for e in self.assistant.events if ctx.logical_day(e.at) == day],
             "actions": [{"id": k, "label": v} for k, v in self.assistant.actions.items()],
+            "records": self._records(reports, day),
+            "plan_changes": {rid: minutes for (d, rid), minutes in self.assistant.plan_changes.items() if d == day},
             "timeline": self._timeline(reports, day),
             "now_card": self._now_card(reports, now),
             "today": build_today(reports, now, self.assistant.notes_for(day), plan_wake(ctx, now),
@@ -289,6 +323,7 @@ class Simulation:
             "scenarios": [{"id": sc.id, "label": sc.label, "description": sc.description} for sc in SCENARIOS.values()],
             "agents": self._agents(),
             "assistant": self._assistant_settings(),
+            "ai": {**KEYSTORE.public(), "sdk": find_spec("anthropic") is not None, "live_only": True},
             "week": build_week(self.assistant, now),
             "profile": self._profile(),
             "connectors": self._connectors(),
@@ -305,6 +340,15 @@ class Simulation:
                  "context": a.agent_context.get(c.id, "")}
                 for c in a.contracts]
 
+    def _records(self, reports: list[ContractReport], day: date) -> list[dict]:
+        """Today's records, flagged when a goal row already shows them (so the timeline never shows them twice)."""
+        shown = {(a, r.hit_at) for rep in reports for r in rep.results if r.hit_at for a in r.rule.actions}
+        ctx = self.assistant.ctx
+        return [{"action": e.action, "label": self.assistant.actions[e.action], "at": f"{e.at:%H:%M}",
+                 "sort": e.at.isoformat(), "source": self.log_sources.get((e.action, e.at), "you" if self.live else "history"),
+                 "on_goal": (e.action, e.at) in shown}
+                for e in self.assistant.events if ctx.logical_day(e.at) == day]
+
     def _assistant_settings(self) -> dict:
         """Current tone plus a preview of the same reminder in every tone."""
         sample_rule = next(r for c in self.assistant.contracts for r in c.rules if r.id == "morning_light")
@@ -320,11 +364,11 @@ class Simulation:
         anchors = self.assistant.profile.anchors
         return [{"id": name, "label": LABELS[name], "time": f"{anchors[name].time:%H:%M}",
                  "shared": [c.name for c in self.assistant.contracts if c.id != contract.id and name in used(c)]}
-                for name in DAY_ORDER if name in used(contract)]
+                for name in ANCHORS if name in used(contract)]
 
     def _profile(self) -> dict:
         anchors = self.assistant.profile.anchors
-        return {"anchors": {name: f"{anchors[name].time:%H:%M}" for name in DAY_ORDER},
+        return {"anchors": {name: f"{anchors[name].time:%H:%M}" for name in ANCHORS},
                 "warnings": list(self.assistant.profile_warnings())}
 
     def _connectors(self) -> list[dict]:
@@ -423,6 +467,9 @@ class Simulation:
         }
 
 
+KEYSTORE = KeyStore()  # the owner's Claude API key: macOS Keychain (or a private file), shared by all modes
+use_key_source(KEYSTORE.get)
+
 SIMS = {"v1": Simulation(), "v2": Simulation(wait_for_observed=True),
         "v3": Simulation(wait_for_observed=True, compact_routines=True, weekday=2),  # Wednesday: a week with a past
         "live": Simulation(wait_for_observed=True, compact_routines=True, live=True, store=LiveStore())}
@@ -437,7 +484,13 @@ def handle(sim: Simulation, op: str, body: dict) -> dict:
     elif op == "advance":
         messages = sim.advance(int(body.get("minutes", 1)), bool(body.get("stop_on_agent", True)))
     elif op == "log":
-        messages = sim.log(body["action"])
+        messages = sim.log(body["action"], at=sim._at_today(body["at"]) if body.get("at") else None)
+    elif op == "plan":
+        sim.change_plan(body)
+        messages = []
+    elif op == "record":
+        sim.change_record(body)
+        messages = []
     elif op == "say":
         messages = sim.say(body["text"])
     elif op == "reply":
@@ -463,6 +516,9 @@ def handle(sim: Simulation, op: str, body: dict) -> dict:
         messages = []
     elif op == "tone":
         sim.assistant.set_tone(body["tone"])
+        messages = []
+    elif op == "ai_key":
+        KEYSTORE.save(body.get("key", "")) if body.get("action") == "save" else KEYSTORE.remove()
         messages = []
     elif op == "context":
         sim.set_context(body["contract_id"], body.get("text", ""))

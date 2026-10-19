@@ -57,6 +57,13 @@ scoring of situation/state) must be deterministic and grounded — never random,
   progress = on-time / judged; rule `weekly_target` (default 5/7 of planned days) → met / on track / at risk /
   critical / out of reach with the reason; "Needs you today" = critical or at-risk goals still doable today.
   The v3 demo simulates Wednesday of the current week so the week has a past.
+- Owner edits: every own record shows in the timeline (unless a goal row already shows it) and can be moved/deleted
+  (`Assistant.move_record/delete_record`); + Log takes "when" (earlier today). Upcoming goals can be moved to another
+  time or skipped for today only (`Assistant.move_goal/skip_goal/restore_goal` → `plan_changes`, saved per day).
+- Claude API key: set in Assistant ⚙︎, stored by `keystore.py` in the macOS Keychain (else ~/.config/timeby, 0600),
+  never in the project/data folder, only ever shown masked; `ai.use_key_source` reads it.
+- Business has topics "Own business" (development, marketing) and "Full-time job (9–5)" (start work, afternoon
+  break, finish on time, switch off after work; Mon–Fri) on profile anchors `work_start`/`work_end` (set in ⚙︎).
 - Agents = contracts, goals = rules. `Assistant.set_enabled(contract_id, on, rule_id=None)` switches either off;
   `Assistant.active` (enabled agents with enabled goals only) is what status/tick/plan see, so off = fully silent.
 - `timeby/server.py` + `timeby/web/index.html` — interactive simulator: simulated clock, simulated sensors

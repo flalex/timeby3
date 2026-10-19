@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 
 from .assistant import Assistant
-from .engine import applies
+from .engine import scheduled
 from .model import Contract, Rule, Status
 
 DONE, LATE, MISSED, OPEN, PLANNED = "done", "late", "missed", "open", "planned"
@@ -31,7 +31,7 @@ class Progress:
 def build_week(assistant: Assistant, now: datetime) -> dict:
     today = assistant.ctx.logical_day(now)
     days = [today - timedelta(days=today.weekday()) + timedelta(days=i) for i in range(7)]
-    results = {day: _day_results(assistant, day, now, today) for day in days if day <= today}
+    results = {day: _day_results(assistant, day, now, today) if day <= today else _day_plan(assistant, day) for day in days}
     agents = [_agent(c, days, today, results) for c in assistant.active]
     return {
         "days": [{"date": d.isoformat(), "label": f"{d:%a}", "num": d.day, "today": d == today, "past": d < today}
@@ -55,6 +55,12 @@ def _day_results(a: Assistant, day: date, now: datetime, today: date) -> dict[tu
     return {(rep.contract.id, r.rule.id): r.status for rep in a.status(when) for r in rep.results}
 
 
+def _day_plan(a: Assistant, day: date) -> dict[tuple[str, str], str]:
+    """A future day: the goals scheduled on it (weekday plans and the owner's skips applied)."""
+    ctx = a.ctx
+    return {(c.id, r.id): PLANNED for c in a.active for r in c.rules if scheduled(r, ctx, day)}
+
+
 def _agent(contract: Contract, days: list[date], today: date, results: dict) -> dict:
     goals = [_goal(contract.id, rule, days, today, results) for rule in contract.rules]
     done, judged = sum(g["done"] for g in goals), sum(g["judged"] for g in goals)
@@ -75,7 +81,7 @@ def _goal(contract_id: str, rule: Rule, days: list[date], today: date, results: 
 
 def _cell(contract_id: str, rule: Rule, day: date, today: date, results: dict) -> str | None:
     if day > today:
-        return PLANNED if applies(rule, day) else None
+        return results[day].get((contract_id, rule.id))
     status = results[day].get((contract_id, rule.id))
     if status is None:
         return None  # not planned that day (weekday goal) or switched off

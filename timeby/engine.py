@@ -19,6 +19,7 @@ class Context:
     events: tuple[Event, ...]
     wait_for_observed: bool = False  # hold rules anchored on an unobserved event (e.g. wake) as WAITING
     tracked_from: dict[date, datetime] | None = None  # live: when tracking started each day; None = judge everything
+    plan_changes: dict[tuple[date, str], int | None] | None = None  # owner's changes for one day: minutes moved, None = skipped
 
     def logical_day(self, at: datetime) -> date:
         start = self.profile.day_start
@@ -38,6 +39,13 @@ class Context:
         action = self.profile.anchors[name].observed_by
         seen = [e.at for e in self.events if e.action == action and abs(e.at - planned) <= OBSERVE_RADIUS]
         return min(seen, key=lambda at: abs(at - planned), default=None)
+
+    def moved_by(self, rule_id: str, day: date) -> timedelta:
+        return timedelta(minutes=(self.plan_changes or {}).get((day, rule_id)) or 0)
+
+    def skipped(self, rule_id: str, day: date) -> bool:
+        changes = self.plan_changes or {}
+        return (day, rule_id) in changes and changes[(day, rule_id)] is None
 
     def untracked(self, day: date, end: datetime) -> bool:
         """Live mode: a window that closed before tracking started that day can't be judged — nobody was watching."""
@@ -71,7 +79,17 @@ def bounds(window: Window, anchor_at: datetime) -> tuple[datetime, datetime]:
 def rule_anchor(rule: Rule, ctx: Context, day: date) -> datetime:
     """Regularity is judged against the plan; do/avoid windows follow the observed day."""
     anchor = ctx.planned_anchor if rule.kind is RuleKind.REGULARITY else ctx.observed_anchor
-    return anchor(rule.window.anchor, day)
+    return anchor(rule.window.anchor, day) + ctx.moved_by(rule.id, day)
+
+
+def _target(rule: Rule, ctx: Context, day: date) -> datetime:
+    """The planned time a regularity goal is judged against that day (moved if the owner moved it)."""
+    return ctx.planned_anchor(rule.window.anchor, day) + ctx.moved_by(rule.id, day)
+
+
+def scheduled(rule: Rule, ctx: Context, day: date) -> bool:
+    """On the plan that day: its weekday, and not skipped by the owner."""
+    return applies(rule, day) and not ctx.skipped(rule.id, day)
 
 
 def rule_bounds(rule: Rule, ctx: Context, day: date) -> tuple[datetime, datetime]:
@@ -148,7 +166,7 @@ def _judge_window(rule: Rule, ctx: Context, now: datetime) -> RuleResult:
 
 def _closest_hit(rule: Rule, ctx: Context, day: date, now: datetime) -> tuple[bool, datetime | None, bool]:
     """(judgeable, when the action happened, untracked). None = skipped once the window closed."""
-    target = ctx.planned_anchor(rule.window.anchor, day)
+    target = _target(rule, ctx, day)
     start, end = bounds(rule.window, target)
     hits = ctx.matching(rule, start, end, now, day)
     if hits:
@@ -168,7 +186,7 @@ def _judge_regularity(rule: Rule, ctx: Context, now: datetime) -> RuleResult:
             today_status = Status.UNTRACKED
         if not judgeable or untracked:
             continue
-        dev = round((hit_at - ctx.planned_anchor(rule.window.anchor, day)).total_seconds() / 60) if hit_at else None
+        dev = round((hit_at - _target(rule, ctx, day)).total_seconds() / 60) if hit_at else None
         ok = dev is not None and abs(dev) <= rule.tolerance
         status = Status.DONE if ok else Status.LATE if dev is not None else Status.MISSED
         judged += 1
@@ -201,7 +219,7 @@ WEEKDAYS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
 
 def evaluate(contract: Contract, ctx: Context, now: datetime) -> ContractReport:
     day = ctx.logical_day(now)
-    results = tuple(evaluate_rule(r, ctx, now) for r in contract.rules if applies(r, day))
+    results = tuple(evaluate_rule(r, ctx, now) for r in contract.rules if scheduled(r, ctx, day))
     judged = [r for r in results if r.earned is not None]
     total = sum(r.rule.weight for r in judged)
     score = round(100 * sum(r.earned for r in judged) / total) if total else None
@@ -263,7 +281,7 @@ def day_plan(contracts: list[Contract], ctx: Context, day: date) -> list[tuple[d
     """Every scheduled reminder for a day, ready to be pushed to a calendar."""
     plan = []
     for contract in contracts:
-        for rule in (r for r in contract.rules if applies(r, day)):
+        for rule in (r for r in contract.rules if scheduled(r, ctx, day)):
             rem = reminder(rule, rule_anchor(rule, ctx, day))  # same anchor the live reminder uses
             if rem:
                 plan.append((rem.at, contract, rule))

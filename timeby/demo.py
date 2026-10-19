@@ -15,6 +15,8 @@ PROFILE = Profile(anchors={
     "lunch": Anchor(time(12, 30)),
     "dinner": Anchor(time(19, 0)),
     "sleep": Anchor(time(23, 0), observed_by="sleep"),
+    "work_start": Anchor(time(9, 0)),
+    "work_end": Anchor(time(17, 0)),
 })
 
 HISTORY_PATTERN = TYPICAL_WEEK  # (action, planned HH:MM, jitter minutes, probability it happens)

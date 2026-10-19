@@ -23,6 +23,15 @@ Rules:
 - Voice: {voice}"""
 
 
+_key_source = lambda: None  # set by the server: the owner's key saved via the UI
+
+
+def use_key_source(source) -> None:
+    """Where to read the owner's API key from; without one, the SDK's own credentials (env / profile) apply."""
+    global _key_source
+    _key_source = source
+
+
 class AiUnavailable(RuntimeError):
     """Recommendations can't be produced right now; the message is safe to show to the owner."""
 
@@ -89,14 +98,15 @@ def _ask_claude(system: str, prompt: str) -> str:
     except ImportError:
         raise AiUnavailable("AI recommendations need the Claude SDK: pip install -r requirements-ai.txt") from None
     try:
-        client = anthropic.Anthropic()  # credentials from ANTHROPIC_API_KEY or an `ant auth login` profile
+        key = _key_source()  # the key saved in timeby, else ANTHROPIC_API_KEY or an `ant auth login` profile
+        client = anthropic.Anthropic(api_key=key) if key else anthropic.Anthropic()
         response = client.beta.messages.create(
             model=MODEL, max_tokens=16000, betas=[FALLBACK_BETA], fallbacks="default",
             output_config={"effort": "low"}, system=system,
             messages=[{"role": "user", "content": prompt}],
         )
     except anthropic.AuthenticationError:
-        raise AiUnavailable("No Claude API key yet — set ANTHROPIC_API_KEY and restart the server.") from None
+        raise AiUnavailable("Claude didn't accept the API key — check it in Assistant ⚙︎.") from None
     except anthropic.RateLimitError:
         raise AiUnavailable("Claude is rate-limited right now — try again in a minute.") from None
     except anthropic.APIConnectionError:
@@ -104,7 +114,7 @@ def _ask_claude(system: str, prompt: str) -> str:
     except anthropic.APIStatusError as e:
         raise AiUnavailable(f"Claude API error ({e.status_code}) — try again later.") from None
     except anthropic.AnthropicError:  # e.g. no credentials configured at all
-        raise AiUnavailable("No Claude API key yet — set ANTHROPIC_API_KEY and restart the server.") from None
+        raise AiUnavailable("No Claude API key yet — add it in Assistant ⚙︎.") from None
     if response.stop_reason == "refusal":
         raise AiUnavailable("Claude declined this request.")
     return "\n".join(block.text for block in response.content if block.type == "text").strip()

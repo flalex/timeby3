@@ -21,6 +21,10 @@ ACTION_KEYWORDS = {
     "water": ["water", "hydrated", "glass of water"],
     "vegetables": ["vegetables", "veggies", "salad", "veg"],
     "protein_meal": ["protein", "eggs", "yogurt", "cottage cheese"],
+    "work_start": ["started work", "start work", "at work", "logged on"],
+    "work_end": ["finished work", "done with work", "end of work", "logged off"],
+    "work_break": ["break", "took a break"],
+    "work_after_hours": ["work email", "work emails", "slack", "work messages"],
     "wake": ["woke", "wake", "awake", "got up", "good morning"],
     "sleep": ["bed", "sleep", "lights out", "good night", "goodnight"],
 }

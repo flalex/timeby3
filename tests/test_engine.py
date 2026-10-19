@@ -351,7 +351,7 @@ def test_late_wake_gives_one_recovery_plan_and_no_reminders_while_asleep():
     a.log("wake", at("08:25"))
     [plan] = [m for m in a.tick(at("08:25")) if m.kind == "recovery"]
     assert "85 min after your usual 07:00" in plan.text and "Late but worth it: Breakfast" in plan.text
-    assert "Unchanged: Lunch 12:30" in plan.text
+    assert "Unchanged: Start work 09:00 · Lunch 12:30" in plan.text
     assert ("nudge", "regular_breakfast") not in kinds(a.tick(at("08:26")))  # covered by the plan
 
 
@@ -423,7 +423,8 @@ def test_story_scenario_cafe_payment_flags_caffeine_and_an_edit_lifts_the_score(
 # --- personal setup ---------------------------------------------------------------------------
 
 def day_times(**changes):
-    times = {"wake": "07:00", "breakfast": "07:45", "lunch": "12:30", "dinner": "19:00", "sleep": "23:00", **changes}
+    times = {"wake": "07:00", "breakfast": "07:45", "lunch": "12:30", "dinner": "19:00", "sleep": "23:00",
+             "work_start": "09:00", "work_end": "17:00", **changes}
     return {name: time.fromisoformat(t) for name, t in times.items()}
 
 
@@ -845,3 +846,149 @@ def test_first_record_of_the_day_means_awake_and_reminders_stop_waiting(tmp_path
 def test_demo_still_judges_the_whole_day(tmp_path):
     a = v3_assistant()
     assert result_of(a, "regular_lunch", at("15:28")).status is Status.MISSED
+
+
+# --- owner edits upcoming goals and own records ------------------------------------------------
+
+def test_move_an_upcoming_goal_today_moves_its_reminder_and_judging():
+    a = v3_assistant()
+    a.move_goal("nutrition", "regular_lunch", at("14:00"), at("10:00"))
+    lunch = result_of(a, "regular_lunch", at("10:00"))
+    assert lunch.anchor_at == at("14:00")
+    assert ("nudge", "regular_lunch") not in kinds(a.tick(at("12:15")))
+    assert ("nudge", "regular_lunch") in kinds(a.tick(at("13:45")))
+    a.log("meal", at("14:05"))
+    assert result_of(a, "regular_lunch", at("14:10")).status is Status.DONE  # on time for the moved plan
+    assert result_of(a, "regular_lunch", at("12:00", DAY + timedelta(days=1))).anchor_at == at("12:30", DAY + timedelta(days=1))
+
+
+def test_skip_and_restore_an_upcoming_goal_and_refuse_settled_or_past():
+    a = v3_assistant()
+    a.skip_goal("fitness", "workout", at("10:00"))
+    assert "workout" not in {r.rule.id for rep in a.status(at("10:00")) for r in rep.results}
+    assert not [m for m in a.tick(at("15:45")) if m.rule_id == "workout"]
+    a.restore_goal("workout", at("10:00"))
+    assert "workout" in {r.rule.id for rep in a.status(at("10:00")) for r in rep.results}
+    with pytest.raises(ValueError, match="pick a time"):
+        a.move_goal("nutrition", "regular_dinner", at("09:00"), at("10:00"))
+    a.log("wake", at("07:00"))
+    with pytest.raises(ValueError, match="already settled"):
+        a.skip_goal("cortisol_rhythm", "consistent_wake", at("10:00"))
+
+
+def test_records_can_be_moved_or_deleted_and_are_listed_for_the_timeline(tmp_path):
+    from timeby.server import handle
+    s = live_at(tmp_path, "15:40")
+    handle(s, "log", {"action": "surf"})                      # matches no goal on a Friday
+    handle(s, "log", {"action": "meal", "at": "12:40"})       # "I had it at…": lunch, on time
+    records = {r["action"]: r for r in s.state()["records"]}
+    assert records["surf"]["on_goal"] is False and records["meal"]["on_goal"] is True
+    handle(s, "record", {"action": "move", "record": {"action": "surf", "at": "15:40"}, "to": "15:00"})
+    handle(s, "record", {"action": "delete", "record": {"action": "meal", "at": "12:40"}})
+    assert [(r["action"], r["at"]) for r in s.state()["records"]] == [("surf", "15:00")]
+    with pytest.raises(ValueError, match="earlier today"):
+        handle(s, "log", {"action": "meal", "at": "18:00"})  # can't log the future
+
+
+def test_plan_changes_are_saved_with_the_day(tmp_path):
+    from timeby.server import handle
+    s = live_at(tmp_path, "10:00")
+    handle(s, "plan", {"contract_id": "nutrition", "rule_id": "regular_lunch", "action": "move", "at": "13:30"})
+    handle(s, "plan", {"contract_id": "fitness", "rule_id": "workout", "action": "skip"})
+    again = live_at(tmp_path, "10:05")
+    assert again.assistant.plan_changes == {(DAY, "regular_lunch"): 60, (DAY, "workout"): None}
+
+
+# --- Claude API key via the UI ------------------------------------------------------------------
+
+class MemoryBackend:
+    where = "test memory"
+
+    def __init__(self):
+        self.value, self.reads = None, 0
+
+    def get(self):
+        self.reads += 1
+        return self.value
+
+    def put(self, key):
+        self.value = key
+
+    def delete(self):
+        self.value = None
+
+
+def test_api_key_is_validated_masked_and_cached():
+    from timeby.keystore import KeyStore
+    backend = MemoryBackend()
+    store = KeyStore(backend)
+    with pytest.raises(ValueError, match="sk-ant-"):
+        store.save("hello")
+    store.save("  sk-ant-api03-abcdefghijklmnopqrstuvwxyz1234  ")
+    assert backend.value == "sk-ant-api03-abcdefghijklmnopqrstuvwxyz1234"
+    assert store.public() == {"configured": True, "masked": "sk-ant-…1234", "where": "test memory"}
+    store.public(); store.public()
+    assert backend.reads == 0  # cached after save: the keychain isn't asked on every UI refresh
+    store.remove()
+    assert store.public()["configured"] is False and backend.value is None
+
+
+def test_private_file_backend_is_created_owner_only(tmp_path):
+    import stat
+    from timeby.keystore import PrivateFile
+    f = PrivateFile(tmp_path / "timeby" / "key")
+    f.put("sk-ant-api03-abcdefghijklmnopqrstuvwxyz1234")
+    assert stat.S_IMODE((tmp_path / "timeby" / "key").stat().st_mode) == 0o600
+    assert f.get() == "sk-ant-api03-abcdefghijklmnopqrstuvwxyz1234"
+
+
+def test_saved_key_is_what_claude_is_called_with(monkeypatch):
+    import sys, types
+    from timeby import ai
+    seen = {}
+
+    class FakeClient:
+        def __init__(self, api_key=None):
+            seen["key"] = api_key
+            self.beta = types.SimpleNamespace(messages=types.SimpleNamespace(create=lambda **kw: types.SimpleNamespace(
+                stop_reason="end_turn", content=[types.SimpleNamespace(type="text", text="• Walk")])))
+
+    fake = types.SimpleNamespace(Anthropic=FakeClient, AuthenticationError=type("A", (Exception,), {}),
+                                 RateLimitError=type("R", (Exception,), {}), APIConnectionError=type("C", (Exception,), {}),
+                                 APIStatusError=type("S", (Exception,), {}), AnthropicError=type("E", (Exception,), {}))
+    monkeypatch.setitem(sys.modules, "anthropic", fake)
+    monkeypatch.setattr(ai, "_key_source", lambda: "sk-ant-api03-saved-key-0000000000")
+    assert ai.recommend_fitness("facts", "") == "• Walk" and seen["key"] == "sk-ant-api03-saved-key-0000000000"
+
+
+@pytest.mark.parametrize("changes, error", [
+    ({"work_end": "11:00"}, "Work end must be 4–12 h after work start."),
+    ({"work_start": "06:00", "work_end": "14:00"}, "between wake-up and lights out"),
+])
+def test_check_day_rejects_bad_working_days(changes, error):
+    from timeby.personal import check_day
+    assert any(error in e for e in check_day(day_times(**changes), PROFILE.day_start).errors)
+
+
+def test_full_time_job_topic_runs_on_weekdays_with_its_own_hours():
+    a = v3_assistant()
+    goals = {r.rule.id: r for r in result_of_all(a, at("08:00"))}
+    assert {"start_work", "work_break", "finish_work", "switch_off"} <= goals.keys()  # DAY is a Friday
+    assert goals["start_work"].anchor_at == at("09:00") and goals["finish_work"].anchor_at == at("17:00")
+    a.log("work_after_hours", at("19:30"))
+    assert result_of(a, "switch_off", at("19:31")).status is Status.VIOLATED
+    saturday = DAY + timedelta(days=1)
+    assert "start_work" not in {r.rule.id for r in result_of_all(a, at("08:00", saturday))}
+
+
+def test_work_hours_are_set_in_the_business_agent_and_partial_updates_keep_the_rest():
+    from timeby.server import Simulation, handle
+    sim = Simulation(wait_for_observed=True, compact_routines=True, today=DAY)
+    business = next(x for x in sim.state()["agents"] if x["id"] == "business")
+    assert [t["id"] for t in business["anchors"]] == ["wake", "lunch", "work_start", "work_end"]
+    state = handle(sim, "profile", {"anchors": {"work_start": "08:00", "work_end": "16:30"}})["state"]
+    assert state["profile"]["anchors"]["work_start"] == "08:00" and state["profile"]["anchors"]["lunch"] == "12:30"
+
+
+def result_of_all(a, now):
+    return [r for rep in a.status(now) for r in rep.results]

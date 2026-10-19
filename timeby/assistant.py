@@ -8,7 +8,7 @@ from typing import Protocol
 from . import engine, intents, narration, personal
 from . import tone as tones
 from .recovery import RecoveryPlan, build_recovery
-from .model import Contract, ContractReport, Event, Message, Profile, Recommendation, Rule, RuleKind, RuleResult
+from .model import Contract, ContractReport, Event, Message, Profile, Recommendation, Rule, RuleKind, RuleResult, Status
 
 ROUTINE_WINDOW = timedelta(hours=3)  # brief/recap only fire this soon after their anchor
 RECAP_GRACE = timedelta(hours=1)     # without an observed bedtime, recap this long after the planned one
@@ -41,6 +41,7 @@ class Assistant:
         self.agent_context: dict[str, str] = {}               # owner's extra context per agent (AI recommendations)
         self.tone = tones.DEFAULT                              # voice of every message (facts never change)
         self.tracked_from: dict[date, datetime] | None = None  # live: when each day's tracking started
+        self.plan_changes: dict[tuple[date, str], int | None] = {}  # owner's changes for a day: minutes moved / None = skipped
         self.actions = actions
         self.notifier = notifier
         self.wake_anchor = wake_anchor
@@ -65,7 +66,7 @@ class Assistant:
 
     @property
     def ctx(self) -> engine.Context:
-        return engine.Context(self.profile, tuple(self.events), self.wait_for_observed, self.tracked_from)
+        return engine.Context(self.profile, tuple(self.events), self.wait_for_observed, self.tracked_from, self.plan_changes)
 
     # --- inbound ----------------------------------------------------------------------------
 
@@ -237,6 +238,48 @@ class Assistant:
             self.events.append(Event(rule.actions[0], at, None if rule.kind is RuleKind.AVOID else rule.id))
             self.events.sort(key=lambda e: e.at)
 
+    # --- the owner reshapes today's plan and fixes their own records --------------------------
+
+    def move_goal(self, contract_id: str, rule_id: str, to: datetime, now: datetime) -> None:
+        """Move an upcoming goal to another time today (today only; the contract stays the same)."""
+        result = self._upcoming(contract_id, rule_id, now)
+        day = self.ctx.logical_day(now)
+        if not now <= to < datetime.combine(day + timedelta(days=1), self.profile.day_start):
+            raise ValueError(f"pick a time between {now:%H:%M} and the end of today")
+        shown = result.anchor_at if result.rule.kind is RuleKind.REGULARITY else result.start
+        moved = self.plan_changes.get((day, rule_id)) or 0
+        self.plan_changes[(day, rule_id)] = moved + round((to - shown).total_seconds() / 60)
+
+    def skip_goal(self, contract_id: str, rule_id: str, now: datetime) -> None:
+        """Take an upcoming goal off today's plan: no reminder, no score."""
+        self._upcoming(contract_id, rule_id, now)
+        self.plan_changes[(self.ctx.logical_day(now), rule_id)] = None
+
+    def restore_goal(self, rule_id: str, now: datetime) -> None:
+        self.plan_changes.pop((self.ctx.logical_day(now), rule_id), None)
+
+    def _upcoming(self, contract_id: str, rule_id: str, now: datetime) -> RuleResult:
+        result, _ = self._lookup((contract_id, rule_id), now)
+        if result.status not in (Status.PENDING, Status.WAITING):
+            raise ValueError(f"{result.rule.label} is already settled today — edit it as a past item instead")
+        return result
+
+    def move_record(self, action: str, at: datetime, to: datetime, now: datetime) -> None:
+        event = self._record(action, at)
+        if not (to <= now and self.ctx.logical_day(to) == self.ctx.logical_day(at)):
+            raise ValueError(f"pick a time earlier today, up to {now:%H:%M}")
+        self.events[self.events.index(event)] = replace(event, at=to)
+        self.events.sort(key=lambda e: e.at)
+
+    def delete_record(self, action: str, at: datetime) -> None:
+        self.events.remove(self._record(action, at))
+
+    def _record(self, action: str, at: datetime) -> Event:
+        event = next((e for e in self.events if e.action == action and e.at == at), None)
+        if event is None:
+            raise ValueError("that record no longer exists")
+        return event
+
     def correctable_range(self, result: RuleResult, now: datetime) -> tuple[datetime, datetime]:
         """Tasks can be logged any time today (late is still real); a limit only within its window."""
         if result.rule.kind is RuleKind.AVOID:
@@ -280,7 +323,7 @@ class Assistant:
         return check.warnings
 
     def profile_warnings(self) -> tuple[str, ...]:
-        times = {name: self.profile.anchors[name].time for name in personal.DAY_ORDER}
+        times = {name: self.profile.anchors[name].time for name in personal.ANCHORS}
         return personal.check_day(times, self.profile.day_start).warnings
 
     def set_days(self, contract_id: str, rule_id: str, days: list[str]) -> None:

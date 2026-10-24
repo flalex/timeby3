@@ -277,7 +277,7 @@ class Assistant:
         day = self.ctx.logical_day(now)
         if not now <= to < datetime.combine(day + timedelta(days=1), self.profile.day_start):
             raise ValueError(f"pick a time between {now:%H:%M} and the end of today")
-        shown = result.anchor_at if result.rule.kind is RuleKind.REGULARITY else result.start
+        shown = engine.planned_start(result.rule, result.anchor_at)
         moved = self.plan_changes.get((day, rule_id)) or 0
         self.plan_changes[(day, rule_id)] = moved + round((to - shown).total_seconds() / 60)
 

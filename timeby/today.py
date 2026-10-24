@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
+from .engine import planned_start
 from .model import ContractReport, RuleKind, RuleResult, Status
 from .recovery import RecoveryPlan
 from .sleep_plan import WakePlan
@@ -97,8 +98,7 @@ def _place_avoid(rep: ContractReport, r: RuleResult, now: datetime) -> dict:
 
 
 def _place_task(rep: ContractReport, r: RuleResult, now: datetime) -> dict:
-    regular = r.rule.kind is RuleKind.REGULARITY
-    planned = r.anchor_at if regular else r.start
+    planned = planned_start(r.rule, r.anchor_at)
     if r.status is Status.DONE:
         return _item(rep, r, "earlier", r.hit_at, outcome=f"{r.hit_at:%H:%M}", tone="good")
     if r.status is Status.LATE:
@@ -108,13 +108,13 @@ def _place_task(rep: ContractReport, r: RuleResult, now: datetime) -> dict:
     if r.status is Status.MISSED:
         return _item(rep, r, "earlier", r.deadline, outcome="Missed", tone="bad")
     if r.status is Status.WAITING:
-        return _item(rep, r, "later", planned, time="After waking")
+        return _item(rep, r, "later", planned, time="After waking", by=f"{r.deadline:%H:%M}")
     if now >= r.deadline:  # off schedule but the window is still open: late, worth doing for partial credit
         return _item(rep, r, "now", planned, opens=r.deadline, now=now, due=r.end, late=True)
-    opens = r.anchor_at - timedelta(minutes=r.rule.tolerance) if regular else r.start
+    opens = planned - timedelta(minutes=r.rule.tolerance)  # doing it earlier still counts ("Done early")
     if now >= opens:
         return _item(rep, r, "now", planned, opens=opens, now=now)
-    return _item(rep, r, "later", planned, time=f"{planned:%H:%M}")
+    return _item(rep, r, "later", planned, time=f"{planned:%H:%M}", by=f"{r.deadline:%H:%M}")
 
 
 def _item(rep: ContractReport, r: RuleResult, slot: str, at: datetime, *, opens: datetime | None = None,

@@ -74,6 +74,9 @@ scoring of situation/state) must be deterministic and grounded — never random,
 - Late credit is explained, not hidden: rule `late_why` (what late still gives / misses), per-goal points in insights
   (earned/weight) and "x of y points" under the score. Times in the UI are one 24 h text field (`timeField`/`parseClock`),
   never native pickers (they follow the OS and may show AM/PM). Live editors check "now" against the real clock.
+- Timeline time = when to start (`engine.planned_start`: the anchor when the window surrounds it, else the window's
+  start), with "until <on-time deadline>" under it; sorted by start, wake-up first on ties. A goal turns "now" at its
+  planned start (minus regularity tolerance); earlier still counts ("Done early").
 - Rule `off_by_default` = opt-in goal (the 9–5 job topic): off until the owner switches it on in ⚙︎.
 - Claude API key: set in Assistant ⚙︎, stored by `keystore.py` in the macOS Keychain (else ~/.config/timeby, 0600),
   never in the project/data folder, only ever shown masked; `ai.use_key_source` reads it.

@@ -1118,3 +1118,18 @@ def test_goal_edit_changes_activity_within_the_goal_or_moves_it_out(tmp_path):
                        "action": "running"})
     move = result_of(s.assistant, "morning_movement", s.now)
     assert move.status is Status.DONE and move.hit_action == "running"
+
+
+def test_timeline_shows_when_to_start_and_until_when():
+    from timeby.today import build_today
+    a = v3_assistant()
+    now = at("06:30")
+    today = build_today(a.status(now), now)
+    later = {i["rule_id"]: i for i in today["later"]}
+    assert (later["protein_breakfast"]["time"], later["protein_breakfast"]["by"]) == ("07:45", "09:15")  # with breakfast
+    assert later["plants_lunch"]["time"] == later["regular_lunch"]["time"] == "12:30"
+    assert later["wind_down"]["time"] == "21:30"  # a window before its anchor starts at its own start
+    current = [today["now"]["hero"], *today["now"]["also"]]
+    wake = next(i for i in current if i and i["rule_id"] == "consistent_wake")
+    assert (wake["at"], wake["by"]) == ("07:00", "07:30")
+    assert all(i["rule_id"] != "protein_breakfast" for i in current if i)  # not "now" before you're even up

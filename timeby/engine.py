@@ -250,6 +250,14 @@ def recommendations(report: ContractReport, now: datetime) -> list[Recommendatio
 LAST_CALL = timedelta(minutes=15)
 
 
+def planned_start(rule: Rule, anchor_at: datetime) -> datetime:
+    """When the owner should start: the anchor itself when the window surrounds it (breakfast ±90 → at breakfast),
+    else the window's own start (daylight from wake-up, wind-down 90 min before bed)."""
+    if rule.kind is RuleKind.REGULARITY or rule.window.start < 0 < rule.window.end:
+        return anchor_at
+    return anchor_at + timedelta(minutes=rule.window.start)
+
+
 def deadline_offset(rule: Rule) -> int:
     """Minutes after the anchor by which the rule must be met on time."""
     return rule.tolerance if rule.kind is RuleKind.REGULARITY else rule.window.end

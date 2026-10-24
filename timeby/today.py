@@ -144,7 +144,8 @@ def _item(rep: ContractReport, r: RuleResult, slot: str, at: datetime, *, opens:
 def _extras(rep: ContractReport, r: RuleResult, item: dict, note: dict, wake: WakePlan | None,
             now: datetime, day_start: datetime) -> dict:
     rule = r.rule
-    extras = {"duration": note.get("duration") or _planned_duration(r, wake), "comment": note.get("comment", "")}
+    extras = {"duration": note.get("duration") or _planned_duration(r, wake), "comment": note.get("comment", ""),
+              "quality": note.get("quality")}
     if rule.kind is RuleKind.AVOID and r.until:
         extras["until"] = _until_label(r)
     if item["slot"] == "earlier":

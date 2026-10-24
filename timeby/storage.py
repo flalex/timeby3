@@ -14,6 +14,7 @@ from pathlib import Path
 
 from . import tasks
 from .assistant import Assistant
+from .context import Situation
 from .tasks import Backlog
 from .model import Event
 from .personal import ANCHORS, parse_times
@@ -64,13 +65,16 @@ class LiveStore:
             "disabled_agents": sorted(a.disabled_contracts),
             "disabled_goals": sorted(_key(*k) for k in a.disabled_rules),
             "agent_context": a.agent_context,
+            "agent_situation": {cid: {"text": s.text, "scope": s.scope, "until": s.until.isoformat() if s.until else None}
+                                for cid, s in a.agent_situation.items()},
             "tone": a.tone,
         }
 
     def _day(self, a: Assistant, day: date) -> dict:
         on_day = lambda keys: sorted(list(k[1:]) for k in keys if k[0] == day)
         records = lambda events: [{"action": e.action, "at": e.at.isoformat(timespec="minutes"), "goal": e.goal,
-                                   **({"duration": e.duration} if e.duration else {}), **({"note": e.note} if e.note else {})}
+                                   **({"duration": e.duration} if e.duration else {}), **({"note": e.note} if e.note else {}),
+                                   **({"quality": e.quality} if e.quality else {})}
                                   for e in events if a.ctx.logical_day(e.at) == day]
         return {
             "day": day.isoformat(),
@@ -112,13 +116,15 @@ class LiveStore:
         a.disabled_contracts = set(s.get("disabled_agents", []))
         a.disabled_rules = {_unkey(k) for k in s.get("disabled_goals", [])}
         a.agent_context = dict(s.get("agent_context", {}))
+        a.agent_situation = {cid: Situation(v["text"], v["scope"], date.fromisoformat(v["until"]) if v.get("until") else None)
+                             for cid, v in s.get("agent_situation", {}).items()}
         a.set_tone(s.get("tone", a.tone))
 
     @staticmethod
     def _restore_day(a: Assistant, d: dict) -> None:
         day = date.fromisoformat(d["day"])
         records = lambda key: [Event(e["action"], datetime.fromisoformat(e["at"]), e.get("goal"), e.get("duration"),
-                                     e.get("note", "")) for e in d.get(key, [])]
+                                     e.get("note", ""), e.get("quality")) for e in d.get(key, [])]
         a.events += records("events")
         a.planned += records("planned")
         a.notes |= {(day, *_unkey(k)): note for k, note in d.get("notes", {}).items()}

@@ -1204,3 +1204,45 @@ def test_companion_goals_are_parts_of_their_meal_and_only_the_routine_hangs_unde
                        "window": {"anchor": "wake", "start": 0, "end": 60}, "weight": 1, "strength": "strong",
                        "why": "w", "advice": "a", "sources": ["s"]}]}
         parse_contract(raw, ACTIONS)
+
+
+# --- context: the agent's "now", the owner's feedback and situation -----------------------------
+
+def test_owner_rates_how_it_went_without_changing_the_score(tmp_path):
+    from timeby.server import handle
+    s = live_at(tmp_path, "19:40")
+    handle(s, "log", {"action": "meal", "at": "19:30"})
+    before = next(r for r in s.assistant.status(s.now) if r.contract.id == "nutrition").score
+    handle(s, "feedback", {"contract_id": "nutrition", "rule_id": "regular_dinner", "quality": "poor",
+                           "comment": "only soup with wontons at the airport"})
+    state = s.state()
+    dinner = next(i for i in state["today"]["earlier"] if i["rule_id"] == "regular_dinner")
+    assert (dinner["quality"], dinner["comment"]) == ("poor", "only soup with wontons at the airport")
+    assert next(r for r in s.assistant.status(s.now) if r.contract.id == "nutrition").score == before  # context, not score
+    nutrition = next(a for a in state["agents"] if a["id"] == "nutrition")
+    assert "Dinner — not ideal: only soup with wontons at the airport" in nutrition["now"]
+    handle(s, "log", {"action": "surf", "at": "19:35"})
+    handle(s, "feedback", {"action": "surf", "at": "19:35", "quality": "good", "comment": "glassy"})
+    surf = next(r for r in s.state()["records"] if r["action"] == "surf")
+    assert (surf["quality"], surf["comment"]) == ("good", "glassy")
+    assert json.loads((tmp_path / f"{DAY.isoformat()}.json").read_text())["notes"]["nutrition/regular_dinner"]["quality"] == "poor"
+    with pytest.raises(ValueError, match="rating"):
+        handle(s, "feedback", {"contract_id": "nutrition", "rule_id": "regular_dinner", "quality": "great"})
+
+
+def test_situation_expires_and_reaches_claude_with_the_agents_status(tmp_path):
+    from timeby.server import handle
+    s = live_at(tmp_path, "18:00")
+    handle(s, "context", {"contract_id": "nutrition", "situation": "Travelling — airport food", "scope": "today",
+                          "text": "Vegetarian"})
+    nutrition = next(a for a in s.state()["agents"] if a["id"] == "nutrition")
+    assert nutrition["situation"] == {"text": "Travelling — airport food", "scope": "today", "label": "today"}
+    assert nutrition["context"] == "Vegetarian" and nutrition["now"][0].startswith("Today:")
+    _, facts, context, _ = s.recommendation_input("nutrition")
+    assert "About me: Vegetarian" in context and "Right now (today): Travelling — airport food" in context
+    assert "Status: Today:" in facts and "Status: This week:" in facts
+    again = live_at(tmp_path, "18:05")
+    assert again.assistant.situation_of("nutrition", again.now).text == "Travelling — airport food"  # saved
+    assert again.assistant.situation_of("nutrition", at("09:00", DAY + timedelta(days=1))) is None   # "today" ended
+    with pytest.raises(ValueError, match="scope"):
+        handle(s, "context", {"contract_id": "nutrition", "situation": "x", "scope": "forever"})

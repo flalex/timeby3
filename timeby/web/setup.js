@@ -1,5 +1,5 @@
-// Agent setup (⚙︎): the day times this agent plans around, its goals (on/off, weekdays) and — in live mode — the
-// owner's context for Claude's recommendations. Loaded after v3.html's script; reuses its globals
+// Agent setup (⚙︎): the day times this agent plans around and its goals (on/off, weekdays). The owner's context
+// lives in the agent's own panel (Agents tab). Loaded after v3.html's script; reuses its globals
 // (S, LIVE, post, render, renderAgents, toggle, showToast, logControl, ICONS, DAY_SHORT, $, esc).
 (() => {
   const WEEK = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
@@ -35,7 +35,7 @@ dialog.su::backdrop { background: rgba(0,0,0,.35); }
     dialog.innerHTML = `<form method="dialog" novalidate>
       <h2 id="su-title">${esc(agent.name)}</h2>
       <p class="su-sub">${esc(agent.goal)}</p>
-      ${timesSection(agent)}${goalsSection(agent)}${LIVE ? contextSection(agent) : ""}
+      ${timesSection(agent)}${goalsSection(agent)}
       <div class="su-msg err" role="alert" hidden></div>
       <div class="su-actions"><button type="button" class="btn secondary" data-cancel>Cancel</button>
         <button class="btn primary">Save</button></div></form>`;
@@ -75,12 +75,6 @@ dialog.su::backdrop { background: rgba(0,0,0,.35); }
     return `<h3>Goals</h3>${goals}`;
   }
 
-  function contextSection(agent) {
-    return `<h3>Context for Claude</h3>
-      <textarea name="context" placeholder="${esc(agent.context_hint)}">${esc(agent.context)}</textarea>
-      <div class="su-note">Used only for this agent's recommendations from Claude. Your goals and their science stay the same.</div>`;
-  }
-
   function dayChips(goal) {
     return `<div class="su-chips" role="group" aria-label="${esc(goal.label)} days">${WEEK.map((d) =>
       `<button type="button" data-day="${d}" aria-pressed="${goal.days.includes(d)}">${DAY_SHORT[d]}</button>`).join("")}</div>`;
@@ -94,7 +88,7 @@ dialog.su::backdrop { background: rgba(0,0,0,.35); }
 
   // ---------- save: the ops that can be rejected go first, then the final state is shown once ----------
   async function saveAgent(agent, form) {
-    const steps = [...timeSteps(agent, form), ...daySteps(agent, form), ...toggleSteps(agent, form), ...contextSteps(agent, form)];
+    const steps = [...timeSteps(agent, form), ...daySteps(agent, form), ...toggleSteps(agent, form)];
     if (!steps.length) return;
     let data = null;
     inflight = true;  // keeps Play and live sync from interleaving with the save
@@ -130,11 +124,6 @@ dialog.su::backdrop { background: rgba(0,0,0,.35); }
     return [...form.querySelectorAll("[data-goal-on]")]
       .filter((el) => el.checked !== agent.goals.find((g) => g.id === el.dataset.goalOn).enabled)
       .map((el) => ["toggle", { contract_id: agent.id, rule_id: el.dataset.goalOn, on: el.checked }]);
-  }
-
-  function contextSteps(agent, form) {
-    const text = form.elements.context?.value.trim();
-    return text === undefined || text === agent.context ? [] : [["context", { contract_id: agent.id, text }]];
   }
 
   // ---------- wiring into v3 ----------

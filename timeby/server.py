@@ -14,7 +14,8 @@ from .demo import PROFILE, seed_history
 from .loader import load_actions, load_contracts
 from .model import ContractReport, Message, RuleKind, RuleResult, Status
 from .connectors import CONNECTORS
-from .ai import RECOMMENDERS, AiUnavailable, facts_for, use_key_source
+from .ai import RECOMMENDERS, AiUnavailable, facts_for, owner_context, use_key_source
+from .context import SCOPES, now_lines
 from .keystore import KeyStore
 from .personal import ANCHORS, LABELS, parse_times
 from .storage import LiveStore
@@ -132,10 +133,23 @@ class Simulation:
         else:
             raise KeyError(action)
 
-    def set_context(self, contract_id: str, text: str) -> None:
-        if contract_id not in self._contracts:
-            raise ValueError(f"unknown agent '{contract_id}'")
-        self.assistant.agent_context[contract_id] = text.strip()
+    def set_context(self, body: dict) -> None:
+        """An agent's context: what the owner tells it about themselves (lasting) and/or their situation right now."""
+        cid = body["contract_id"]
+        if cid not in self._contracts:
+            raise ValueError(f"unknown agent '{cid}'")
+        if "text" in body:
+            self.assistant.agent_context[cid] = body["text"].strip()
+        if "situation" in body:
+            self.assistant.set_situation(cid, body["situation"], body.get("scope") or "today", self.now)
+
+    def feedback(self, body: dict) -> None:
+        """How it went, right after it's done: a rating and/or a note on a goal or on the owner's own record."""
+        quality, comment = body.get("quality") or None, body.get("comment", "")
+        if body.get("rule_id"):
+            self.assistant.rate_goal(body["contract_id"], body["rule_id"], self.now, quality, comment)
+        else:
+            self.assistant.rate_record(body["action"], self._at_today(body["at"]), quality, comment)
 
     def recommendation_input(self, contract_id: str):
         """Everything one agent's AI recommendation needs, captured under the lock (the Claude call runs outside it)."""
@@ -147,7 +161,16 @@ class Simulation:
         if not report:
             raise ValueError("Switch this agent on to get recommendations.")
         voice = TONES[self.assistant.tone].ai_voice
-        return RECOMMENDERS[contract_id], facts_for(report, self.now), self.assistant.agent_context.get(contract_id, ""), voice
+        status = self._now_lines(report, build_week(self.assistant, self.now))
+        return RECOMMENDERS[contract_id], facts_for(report, self.now, status), self._owner_context(contract_id), voice
+
+    def _now_lines(self, report: ContractReport, week: dict) -> list[str]:
+        week_agent = next((w for w in week["agents"] if w["id"] == report.contract.id), None)
+        return now_lines(report, week_agent, self.assistant.notes_for(self.assistant.ctx.logical_day(self.now)))
+
+    def _owner_context(self, contract_id: str) -> str:
+        s = self.assistant.situation_of(contract_id, self.now)
+        return owner_context(self.assistant.agent_context.get(contract_id, ""), s.text if s else "", SCOPES[s.scope] if s else "")
 
     def jump(self, hhmm: str) -> list[dict]:
         """Move the simulated clock to HH:MM today; going back replays the day from the start."""
@@ -195,7 +218,8 @@ class Simulation:
         if body["action"] == "update":
             to, new_action = self._at_today(body["to"]), body.get("new_action") or action
             self.assistant.update_record(action, at, self.now, to=to, new_action=new_action,
-                                         duration=_minutes(body.get("duration")), note=body.get("note", ""))
+                                         duration=_minutes(body.get("duration")), note=body.get("note", ""),
+                                         quality=body.get("quality") or None)
             self.log_sources[(new_action, to)] = self.log_sources.pop((action, at), "you")
         elif body["action"] == "delete":
             self.assistant.delete_record(action, at)
@@ -233,7 +257,7 @@ class Simulation:
         self.assistant.correct(cid, rid, happened, at, self.now, action)
         if at and happened:
             self.log_sources[(action or rule.actions[0], at)] = "you (edited)"
-        self.assistant.annotate(cid, rid, self.now, duration, note)
+        self.assistant.annotate(cid, rid, self.now, duration, note, body.get("quality") or None)
 
     def set_profile(self, anchors: dict[str, str]) -> None:
         """New times for some or all anchors; the rest stay as they are."""
@@ -331,6 +355,7 @@ class Simulation:
         now, ctx = self.now, self.assistant.ctx
         day = ctx.logical_day(now)
         reports = self.assistant.status(now)
+        week = build_week(self.assistant, now)
         resolved = {(rep.contract.id, r.rule.id) for rep in reports for r in rep.results if r.status is not Status.PENDING}
         return {
             "now": now.isoformat(), "clock": f"{now:%H:%M}", "day": f"{now:%a %d %b}",
@@ -359,32 +384,37 @@ class Simulation:
                                  (self.assistant.tracked_from or {}).get(day)),
             "scenario": self.scenario.id,
             "scenarios": [{"id": sc.id, "label": sc.label, "description": sc.description} for sc in SCENARIOS.values()],
-            "agents": self._agents(),
+            "agents": self._agents(reports, week),
             "assistant": self._assistant_settings(),
             "ai": {**KEYSTORE.public(), "sdk": find_spec("anthropic") is not None, "live_only": True},
-            "week": build_week(self.assistant, now),
+            "week": week,
             "profile": self._profile(),
             "connectors": self._connectors(),
             "tasks": tasks.view(self.backlog, day),
             "busy": [self._busy_block(m) for m in sorted(self.meetings, key=lambda m: m.start)],
         }
 
-    def _agents(self) -> list[dict]:
-        a = self.assistant
+    def _agents(self, reports: list[ContractReport], week: dict) -> list[dict]:
+        a, by_id = self.assistant, {rep.contract.id: rep for rep in reports}
         return [{"id": c.id, "name": c.name, "domain": c.domain, "goal": c.goal, "enabled": a.is_enabled(c.id),
                  "goals": [{"id": r.id, "label": r.label, "kind": r.kind.value, "action": r.actions[0],
                             "days": list(a.customized(c.id, r).days), "weekly": bool(r.days), "topic": r.topic,
                             "enabled": (c.id, r.id) not in a.disabled_rules} for r in c.rules],
                  "anchors": self._agent_anchors(c), "context_hint": c.context_hint,
-                 "context": a.agent_context.get(c.id, "")}
+                 "context": a.agent_context.get(c.id, ""), "situation": self._situation(c.id),
+                 "now": self._now_lines(by_id[c.id], week) if c.id in by_id else []}
                 for c in a.contracts]
+
+    def _situation(self, contract_id: str) -> dict | None:
+        s = self.assistant.situation_of(contract_id, self.now)
+        return {"text": s.text, "scope": s.scope, "label": SCOPES[s.scope]} if s else None
 
     def _records(self, reports: list[ContractReport], day: date) -> list[dict]:
         """Today's records, flagged when a goal row already shows them (so the timeline never shows them twice)."""
         shown = {(a, r.hit_at) for rep in reports for r in rep.results if r.hit_at for a in r.rule.actions}
         ctx, a = self.assistant.ctx, self.assistant
         return [{"action": e.action, "label": a.actions[e.action], "at": f"{e.at:%H:%M}", "sort": e.at.isoformat(),
-                 "duration": e.duration, "comment": e.note,
+                 "duration": e.duration, "comment": e.note, "quality": e.quality,
                  "source": self.log_sources.get((e.action, e.at), "you" if self.live else "history"),
                  "on_goal": (e.action, e.at) in shown, "planned": e in a.planned, "goal": e.goal}
                 for e in [*a.events, *a.planned] if ctx.logical_day(e.at) == day]
@@ -594,7 +624,10 @@ def handle(sim: Simulation, op: str, body: dict) -> dict:
         KEYSTORE.save(body.get("key", "")) if body.get("action") == "save" else KEYSTORE.remove()
         messages = []
     elif op == "context":
-        sim.set_context(body["contract_id"], body.get("text", ""))
+        sim.set_context(body)
+        messages = []
+    elif op == "feedback":
+        sim.feedback(body)
         messages = []
     elif op == "sensors":
         sim.sensors_on = bool(body["on"])

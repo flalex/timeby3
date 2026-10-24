@@ -107,6 +107,44 @@ aside.left { position: sticky; top: 76px; height: calc(100vh - 100px); display: 
 .insight .late-why { background: var(--warn-soft); color: var(--ink); border-radius: 8px; padding: 6px 8px; margin-bottom: 6px; }
 .editor .ed-note { margin: 0; font-size: 13px; color: var(--muted); background: var(--warn-soft); border-radius: 8px; padding: 8px 10px; }
 .insight .frac { font-weight: 600; font-variant-numeric: tabular-nums; color: var(--muted); margin-left: 4px; }
+.checkin { background: var(--surface); border-radius: 16px; box-shadow: var(--shadow); padding: 14px 16px; margin-bottom: 12px;
+  display: grid; gap: 10px; border-left: 4px solid var(--accent); }
+.ci-head { display: flex; align-items: center; gap: 8px; }
+.ci-ok { width: 24px; height: 24px; border-radius: 50%; background: var(--accent); color: var(--accent-ink); display: grid; place-items: center; font-size: 13px; }
+.ci-ask { color: var(--muted); }
+.ci-x { margin-left: auto; border: 0; background: none; color: var(--muted); font-size: 20px; line-height: 1; padding: 2px 6px; border-radius: 6px; }
+.ci-x:hover { background: var(--surface-2); color: var(--ink); }
+.ci-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.ci-row input { flex: 1 1 220px; font: inherit; font-size: 14px; color: var(--ink); background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; }
+.ci-row .btn { padding: 8px 14px; }
+.q-seg { display: inline-flex; gap: 4px; flex-wrap: wrap; }
+.q-seg button { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 5px 11px; font-size: 13px; font-weight: 600; color: var(--muted); }
+.q-seg button.on[data-ci-q="good"], .q-seg button.on[data-q="good"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.q-seg button.on[data-ci-q="okay"], .q-seg button.on[data-q="okay"] { background: var(--surface-2); border-color: var(--muted); color: var(--ink); }
+.q-seg button.on[data-ci-q="poor"], .q-seg button.on[data-q="poor"] { background: var(--warn-soft); border-color: var(--warn); color: var(--warn); }
+.name .q { font-size: 11.5px; font-weight: 600; border-radius: 999px; padding: 1px 8px; white-space: nowrap; }
+.q.q-good { background: var(--accent-soft); color: var(--accent); }
+.q.q-okay { background: var(--surface-2); color: var(--muted); }
+.q.q-poor { background: var(--warn-soft); color: var(--warn); }
+.ctx { margin: 8px 0 4px; display: grid; gap: 6px; font-size: 13px; }
+.ctx .topic { padding: 4px 0 0; }
+.ctx-now { margin: 0; padding-left: 16px; color: var(--ink); display: grid; gap: 2px; }
+.ctx-sit { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; background: var(--surface-2); border-radius: 10px; padding: 6px 10px; }
+.ctx-sit .linkbtn { margin-left: auto; font-size: 12px; }
+.ctx-about { color: var(--muted); font-size: 12px; white-space: pre-wrap; border-left: 2px solid var(--line); padding-left: 8px; }
+.ctx-edit summary { cursor: pointer; color: var(--accent); font-weight: 600; font-size: 13px; list-style: none; width: max-content; }
+.ctx-edit summary::-webkit-details-marker { display: none; }
+.ctx-edit[open] { display: grid; gap: 8px; }
+.ctx-edit label { display: grid; gap: 4px; color: var(--muted); font-size: 12px; }
+.ctx-edit input, .ctx-edit textarea { font: inherit; font-size: 13px; color: var(--ink); background: var(--surface-2); border: 1px solid var(--line);
+  border-radius: 8px; padding: 6px 8px; }
+.ctx-edit textarea { min-height: 60px; resize: vertical; }
+.ctx-scope { display: inline-flex; background: var(--surface-2); border-radius: 10px; padding: 3px; width: max-content; max-width: 100%; flex-wrap: wrap; }
+.ctx-scope button { border: 0; background: none; border-radius: 8px; padding: 4px 10px; font-size: 12px; font-weight: 600; color: var(--muted); }
+.ctx-scope button.on { background: var(--surface); color: var(--ink); box-shadow: var(--shadow); }
+.ctx-note { font-size: 11.5px; color: var(--faint); }
+.ctx-acts { display: flex; gap: 8px; align-items: center; }
+.ctx-acts .btn { padding: 6px 12px; font-size: 13px; }
 .ai { margin: 8px 0 4px; display: grid; gap: 6px; }
 .ai .btn { justify-self: start; padding: 6px 12px; font-size: 13px; }
 .ai-hint { font-size: 12px; color: var(--faint); }
@@ -615,7 +653,11 @@ function toggle(label, on, attrs, small = false, disabled = false) {
     <input type="checkbox" ${on ? "checked" : ""} ${disabled ? "disabled" : ""} ${attrs}><span></span></label>`;
 }
 
+/** True while the owner types in one of these fields — a live re-render would wipe what they typed. */
+const typingIn = (el) => el.contains(document.activeElement) && /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName);
+
 function renderAgents() {
+  if (typingIn($("agents"))) return;
   const reports = Object.fromEntries(S.contracts.map((c) => [c.id, c]));
   $("agents").innerHTML = S.agents.map((a) => agentCard(a, reports[a.id])).join("");
   $("agents").querySelectorAll("[data-fold]").forEach((b) => (b.onclick = () => {
@@ -628,6 +670,7 @@ function renderAgents() {
     api("toggle", { contract_id: input.dataset.agent, rule_id: null, on: input.checked });
   }));
   $("agents").querySelectorAll("[data-ask]").forEach((b) => (b.onclick = () => askClaude(b.dataset.ask)));
+  bindContext();
 }
 
 function agentCard(a, report) {
@@ -675,7 +718,7 @@ function agentInsight(a, report) {
   return `<div class="score-block">${bigRing(report.score)}
       <div><div class="phase">${esc(report.phase || "Today")}</div><div class="counts">${summary}</div>${pointsLine(report.points)}</div></div>
     <p class="agoal">${esc(a.goal)}</p>
-    ${LIVE ? aiBlock(a) : ""}
+    ${contextBlock(a)}${LIVE ? aiBlock(a) : ""}
     <div class="rules">${rules}</div>`;
 }
 
@@ -713,8 +756,60 @@ function weeklyInsight(a, w) {
   return `<div class="score-block">${bigRing(pct(w.done, w.judged))}
       <div><div class="phase">This week · ${w.done} of ${w.judged} on time</div><div class="counts">${summary}</div></div></div>
     <p class="agoal">${esc(a.goal)}</p>
-    ${LIVE ? aiBlock(a) : ""}
+    ${contextBlock(a)}${LIVE ? aiBlock(a) : ""}
     <div class="rules">${rules}</div>`;
+}
+
+// ---------- context: what the agent sees right now, the owner's situation, and what it should know about them ----------
+const SCOPE_OPTIONS = [["today", "Today"], ["week", "This week"], ["open", "Until I clear it"]];
+const ctxOpen = new Set();  // agents whose context editor is unfolded
+
+function contextBlock(a) {
+  const sit = a.situation, scope = sit?.scope || "today";
+  const about = a.context ? `<div class="ctx-about" title="What this agent knows about you">${esc(a.context)}</div>` : "";
+  return `<div class="ctx">
+    <div class="topic">Now</div>
+    <ul class="ctx-now">${a.now.map((l) => `<li>${esc(l)}</li>`).join("")}</ul>
+    ${sit ? `<div class="ctx-sit"><span>📍 ${esc(sit.text)}</span><span class="cnt">${esc(sit.label)}</span>
+      <button class="linkbtn" data-sit-clear="${a.id}">Clear</button></div>` : ""}
+    ${about}
+    <details class="ctx-edit" data-ctx="${a.id}" ${ctxOpen.has(a.id) ? "open" : ""}>
+      <summary>${sit || a.context ? "Edit context" : "+ Add context"}</summary>
+      <label>Right now <input data-sit-text placeholder="e.g. Travelling — airport food until Sunday" value="${esc(sit?.text || "")}"></label>
+      <div class="ctx-scope" role="radiogroup" aria-label="For how long">${SCOPE_OPTIONS.map(([v, l]) =>
+        `<button type="button" data-scope="${v}" class="${v === scope ? "on" : ""}">${l}</button>`).join("")}</div>
+      <label>About you <textarea data-about placeholder="${esc(a.context_hint)}">${esc(a.context)}</textarea></label>
+      <div class="ctx-note">Both shape this agent's advice${LIVE ? " and Claude's recommendations" : ""}. Your goals and their science stay the same.</div>
+      <div class="ctx-acts"><button class="btn primary" data-ctx-save="${a.id}">Save context</button><span class="ed-err" hidden></span></div>
+    </details></div>`;
+}
+
+function bindContext() {
+  const root = $("agents");
+  root.querySelectorAll(".ctx-edit").forEach((d) => d.addEventListener("toggle", () => (d.open ? ctxOpen.add(d.dataset.ctx) : ctxOpen.delete(d.dataset.ctx))));
+  root.querySelectorAll(".ctx-scope button").forEach((b) => (b.onclick = () =>
+    b.parentElement.querySelectorAll("button").forEach((x) => x.classList.toggle("on", x === b))));
+  root.querySelectorAll("[data-sit-clear]").forEach((b) => (b.onclick = () => saveContext(b.dataset.sitClear, { situation: "" }, "situation cleared")));
+  root.querySelectorAll("[data-ctx-save]").forEach((b) => (b.onclick = () => {
+    const box = b.closest(".ctx-edit");
+    const body = { situation: box.querySelector("[data-sit-text]").value, scope: box.querySelector(".ctx-scope .on").dataset.scope,
+      text: box.querySelector("[data-about]").value };
+    ctxOpen.delete(box.dataset.ctx);
+    saveContext(box.dataset.ctx, body, "context saved", box.querySelector(".ed-err"));
+  }));
+}
+
+async function saveContext(agentId, body, what, errorBox = null) {
+  try {
+    const data = await post("context", { contract_id: agentId, ...body });
+    document.activeElement?.blur();  // so the re-render isn't held back as "still typing"
+    S = data.state;
+    render();
+    logControl("Agent context", `${S.agents.find((x) => x.id === agentId).name} · ${what}`);
+  } catch (err) {
+    if (errorBox) { errorBox.hidden = false; errorBox.textContent = err.message; }
+    else showToast({ kind: "info", at: S.clock, text: err.message });
+  }
 }
 
 function bigRing(score) {
@@ -824,12 +919,72 @@ function ring(score) {
 
 function renderToday() {
   const t = S.today;
-  $("now-card").innerHTML = nowSection(t.now, t.later);
+  if (!typingIn($("now-card"))) $("now-card").innerHTML = checkinHtml() + nowSection(t.now, t.later);
   $("timeline").innerHTML = timelineSection(t);
   const foldable = showAllEarlier && t.earlier.length > PAST_VISIBLE;
   $("fold-slot").innerHTML = foldable ? `<button class="linkbtn" id="fold-earlier">Fold earlier</button>` : "";
   bindToday();
 }
+
+// ---------- check-in: right after something is done, one tap for how it went (and an optional note) ----------
+const QUALITY = { good: ["👍", "Good"], okay: ["👌", "Okay"], poor: ["👎", "Not ideal"] };
+let checkin = null;  // { title, quality, comment, contract_id, rule_id } for a goal, { title, quality, comment, action, at } for a record
+
+/** Find what a log just completed — a goal row, else the owner's own record — and ask how it went. */
+function offerCheckin(action, at) {
+  const goal = S.today.earlier.find((i) => i.edit?.happened && i.edit.action === action && i.at === at);
+  const record = !goal && (S.records || []).find((r) => r.action === action && r.at === at && !r.planned);
+  if (!goal && !record) return;
+  checkin = goal ? { title: goal.title, quality: goal.quality, comment: goal.comment, contract_id: goal.contract_id, rule_id: goal.rule_id }
+    : { title: SHORT[action] || record.label, quality: record.quality, comment: record.comment, action, at };
+  renderToday();
+}
+
+function qualityButtons(current, attr) {
+  return Object.entries(QUALITY).map(([q, [icon, label]]) =>
+    `<button type="button" ${attr}="${q}" class="${q === current ? "on" : ""}" aria-pressed="${q === current}">${icon} ${label}</button>`).join("");
+}
+
+function checkinHtml() {
+  if (!checkin) return "";
+  const c = checkin;
+  return `<div class="checkin" id="checkin" role="group" aria-label="How it went">
+    <div class="ci-head"><span class="ci-ok">✓</span><b>${esc(c.title)} done</b><span class="ci-ask">How was it?</span>
+      <button class="ci-x" id="ci-x" aria-label="Close" title="Close">×</button></div>
+    <div class="ci-row"><div class="q-seg">${qualityButtons(c.quality, "data-ci-q")}</div>
+      <input id="ci-note" placeholder="Add a note — e.g. only soup at the airport" value="${esc(c.comment || "")}" aria-label="Note">
+      <button class="btn primary" id="ci-save">Save</button></div></div>`;
+}
+
+function bindCheckin() {
+  if (!$("checkin")) return;
+  $("ci-x").onclick = () => { checkin = null; renderToday(); };
+  $("checkin").querySelectorAll("[data-ci-q]").forEach((b) => (b.onclick = () => {
+    checkin.quality = checkin.quality === b.dataset.ciQ ? null : b.dataset.ciQ;  // tap again to clear
+    $("checkin").querySelectorAll("[data-ci-q]").forEach((x) => { x.classList.toggle("on", x.dataset.ciQ === checkin.quality); x.setAttribute("aria-pressed", x.dataset.ciQ === checkin.quality); });
+    sendCheckin(false);
+  }));
+  $("ci-save").onclick = () => sendCheckin(true);
+  $("ci-note").onkeydown = (e) => { if (e.key === "Enter") sendCheckin(true); };
+}
+
+async function sendCheckin(close) {
+  const c = checkin;
+  c.comment = $("ci-note").value;
+  const target = c.rule_id ? { contract_id: c.contract_id, rule_id: c.rule_id } : { action: c.action, at: c.at };
+  try {
+    const data = await post("feedback", { ...target, quality: c.quality || "", comment: c.comment });
+    S = data.state;
+    if (close) { checkin = null; document.activeElement?.blur(); }
+    render();
+    if (close) logControl("How it went", `${c.title} · ${[c.quality && QUALITY[c.quality][1].toLowerCase(), c.comment].filter(Boolean).join(" — ") || "no note"}`);
+  } catch (err) {
+    showToast({ kind: "info", at: S.clock, text: err.message });
+  }
+}
+
+/** How it went, on the row: a small word in its tone, so a "not ideal" dinner reads differently from a good one. */
+const qualityTag = (i) => i.quality ? `<span class="q q-${i.quality}" title="How it went">${QUALITY[i.quality][0]} ${QUALITY[i.quality][1].toLowerCase()}</span>` : "";
 
 function nowSection(now, later) {
   const chips = now.avoid.length ? `<div class="chips">${now.avoid.map((a) =>
@@ -944,6 +1099,7 @@ function recordRow(r) {
     ${open ? `<div class="editor" id="rec-editor">
       <div class="fields">${activityField("rec-act", r.action)}<label>Time ${timeField("rec-at", r.at)}</label>${durationField("rec-dur", r.duration)}</div>
       <span class="ed-hint">${RECORD_TIME_HINT}</span>
+      <div class="q-seg" id="rec-q" aria-label="How it went">${qualityButtons(r.quality, "data-q")}</div>
       ${noteField("rec-note", r.comment)}
       <div class="ed-err" id="rec-err" hidden></div>
       <div class="acts"><button class="btn primary" id="rec-save">Save</button><button class="btn secondary" id="rec-delete">Delete</button>
@@ -984,7 +1140,7 @@ function timeCell(start, item, cls = "", until = "") {
 }
 const durationTag = (item) => item.kind !== "avoid" && item.duration ? `<span class="dur">${fmtDur(item.duration)}</span>` : "";
 const comment = (i) => i.comment ? `<span class="cmt" title="${esc(i.comment)}">💬</span>` : "";
-const nameCell = (i) => `<span class="name"><span>${esc(i.title)}</span>${comment(i)}${durationTag(i)}${partsHtml(i)}</span>`;
+const nameCell = (i) => `<span class="name"><span>${esc(i.title)}</span>${qualityTag(i)}${comment(i)}${durationTag(i)}${partsHtml(i)}</span>`;
 
 function foldRow(items) {
   const count = (pred) => items.filter(pred).length;
@@ -1036,6 +1192,7 @@ function editorHtml(i) {
     </div>
       <span class="ed-hint">${avoid ? `between ${i.edit.min} and ${i.edit.until_now ? "now" : i.edit.max}` : "any time today — later today means planned"}</span>
     ${i.late_note ? `<p class="ed-note">${esc(i.late_note)}</p>` : ""}
+    ${avoid ? "" : `<div class="q-seg" id="ed-q" aria-label="How it went">${qualityButtons(i.quality, "data-q")}</div>`}
     ${noteField("ed-cmt", i.comment)}
     <div class="ed-err" id="ed-err" hidden></div>
     <div class="acts"><button class="btn primary" id="ed-save">Save</button>
@@ -1078,8 +1235,10 @@ function bindToday() {
   const v = $("main");
   v.querySelectorAll("#toggle-earlier, #fold-earlier").forEach((b) => b.addEventListener("click", () => { showAllEarlier = !showAllEarlier; renderToday(); }));
   v.querySelector("#why")?.addEventListener("click", () => { const id = S.today.now.hero.rule_id; openWhy = openWhy === id ? null : id; renderToday(); });
-  v.querySelectorAll("[data-reply]").forEach((b) => b.addEventListener("click", () => {
-    const h = S.today.now.hero; api("reply", { op: b.dataset.reply, contract_id: h.contract_id, rule_id: h.rule_id });
+  v.querySelectorAll("[data-reply]").forEach((b) => b.addEventListener("click", async () => {
+    const h = S.today.now.hero, op = b.dataset.reply;
+    await api("reply", { op, contract_id: h.contract_id, rule_id: h.rule_id });
+    if (op === "done") offerCheckin(h.action, S.clock);
   }));
   v.querySelectorAll("[data-log]").forEach((b) => b.addEventListener("click", (e) => { e.stopPropagation(); logNow(b.dataset.log); }));
   v.querySelectorAll("[data-plan]").forEach((row) => row.addEventListener("click", () => toggleEditor(`plan:${row.dataset.plan}`)));
@@ -1090,6 +1249,7 @@ function bindToday() {
     const h = S.today.now.hero, partner = h.pair;
     await api("reply", { op: "done", contract_id: h.contract_id, rule_id: h.rule_id });
     await api("log", { action: partner.action });
+    offerCheckin(h.action, S.clock);
   });
   v.querySelector("#late-start")?.addEventListener("click", () => { lateOpen = !lateOpen; renderToday(); });
   v.querySelector("#untracked-toggle")?.addEventListener("click", () => { untrackedOpen = !untrackedOpen; renderToday(); });
@@ -1098,6 +1258,7 @@ function bindToday() {
   v.querySelectorAll("[data-edit-part]").forEach((b) => b.addEventListener("click", (e) => { e.stopPropagation(); toggleEditor(b.dataset.editPart); }));
   bindEditor();
   bindRecordEditor();
+  bindCheckin();
   bindPlanEditor();
 }
 
@@ -1130,11 +1291,13 @@ function bindRecordEditor() {
   if (!$("rec-editor")) return;
   const r = [...ownRecords(), ...ownRecords({ planned: true })].find((x) => recordKey(x) === editing);
   const record = { action: r.action, at: r.at };
+  bindQuality("rec-q");
   $("rec-cancel").onclick = () => toggleEditor(editing);
   $("rec-save").onclick = async () => {
     const to = readTime("rec-at");
     if (!to) return showError("rec-err", TIME_HINT);
-    const body = { action: "update", record, to, new_action: $("rec-act").value, duration: $("rec-dur").value, note: $("rec-note").value };
+    const body = { action: "update", record, to, new_action: $("rec-act").value, duration: $("rec-dur").value, note: $("rec-note").value,
+      quality: readQuality("rec-q") };
     if (await applyChange("record", body, "rec-err")) logControl("Record edited", `${SHORT[body.new_action] || body.new_action} ${to}`);
   };
   $("rec-delete").onclick = async () => (await applyChange("record", { action: "delete", record }, "rec-err"))
@@ -1166,9 +1329,10 @@ async function logNow(action, at = null, duration = "") {
     S = data.state;
     route(data.messages, "log");
     render();
-    const when = body.at || S.clock, verb = dayMin(when) > dayMin(S.clock) ? "Planned" : "Logged";
-    showToast({ kind: "info", at: S.clock, text: `${verb} ${ICONS[action] || ""} ${SHORT[action] || action} at ${when}.` });
+    const when = body.at || S.clock, planned = dayMin(when) > dayMin(S.clock), verb = planned ? "Planned" : "Logged";
     logControl(verb, `${SHORT[action] || action} ${when}`);
+    if (!planned) offerCheckin(action, when);
+    if (planned || !checkin) showToast({ kind: "info", at: S.clock, text: `${verb} ${ICONS[action] || ""} ${SHORT[action] || action} at ${when}.` });
   } catch (err) {
     showToast({ kind: "info", at: S.clock, text: err.message });
   }
@@ -1184,11 +1348,21 @@ function timeProblem(at, edit, avoid) {
   return "";
 }
 
+/** A rating row inside an editor: tap to choose, tap again to clear. */
+function bindQuality(id) {
+  $(id)?.querySelectorAll("[data-q]").forEach((b) => (b.onclick = () => {
+    const on = !b.classList.contains("on");
+    $(id).querySelectorAll("[data-q]").forEach((x) => { x.classList.toggle("on", on && x === b); x.setAttribute("aria-pressed", on && x === b); });
+  }));
+}
+const readQuality = (id) => $(id)?.querySelector("[data-q].on")?.dataset.q || "";
+
 function bindEditor() {
   const ed = $("editor");
   if (!ed) return;
   const item = S.today.earlier.find((i) => i.rule_id === editing);
   let happened = item.edit.happened;
+  bindQuality("ed-q");
   const choose = (h) => {
     happened = h;
     ed.querySelectorAll(".seg2 button").forEach((x) => x.classList.toggle("on", (x.dataset.h === "1") === h));
@@ -1203,7 +1377,8 @@ function bindEditor() {
     if (problem) return showError("ed-err", problem);
     const planned = happened && item.kind !== "avoid" && dayMin(at) > dayMin(currentClock());
     const what = !happened ? (item.kind === "avoid" ? "kept" : "missed") : planned ? `planned ${at}` : item.kind === "avoid" ? `broken ${at}` : `done ${at}`;
-    await saveEdit(item, { happened, at, action: $("ed-act")?.value || "", duration: $("ed-dur")?.value || "", comment: $("ed-cmt").value }, what);
+    await saveEdit(item, { happened, at, action: $("ed-act")?.value || "", duration: $("ed-dur")?.value || "",
+      comment: $("ed-cmt").value, quality: readQuality("ed-q") }, what);
   };
   const del = $("ed-delete");
   if (del) del.onclick = () => saveEdit(item, { happened: false, at: "", duration: "", comment: "" }, "record deleted");
@@ -1277,7 +1452,7 @@ function clearPanels() {
 }
 
 async function restart() {
-  setPlaying(false); showAllEarlier = false; openWhy = null; editing = null; tomorrowOpen = false; lateOpen = false;
+  setPlaying(false); showAllEarlier = false; openWhy = null; editing = null; checkin = null; tomorrowOpen = false; lateOpen = false;
   clearPanels();
   await api("reset", { scenario: $("scenario").value || null });
   const sc = S.scenarios.find((x) => x.id === S.scenario);

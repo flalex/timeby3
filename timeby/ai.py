@@ -72,10 +72,12 @@ RECOMMENDERS = {
 
 # --- shared plumbing ------------------------------------------------------------------------
 
-def facts_for(report: ContractReport, now: datetime) -> str:
-    """Today's computed state of one agent, as plain lines for the prompt."""
+def facts_for(report: ContractReport, now: datetime, status: list[str] = ()) -> str:
+    """Today's computed state of one agent, as plain lines for the prompt; `status` = the agent's "now" lines
+    (today so far, the owner's feedback on how things went, what the week needs)."""
     lines = [f"Time now: {now:%A %H:%M}. Agent: {report.contract.name}. Goal: {report.contract.goal}",
-             f"Score today: {'n/a' if report.score is None else f'{report.score}/100'}."]
+             f"Score today: {'n/a' if report.score is None else f'{report.score}/100'}.",
+             *(f"Status: {line}" for line in status)]
     for r in report.results:
         rule = r.rule
         when = f"{r.start:%H:%M}–{r.end:%H:%M}" if rule.kind is not RuleKind.REGULARITY else f"planned {r.anchor_at:%H:%M}"
@@ -84,6 +86,13 @@ def facts_for(report: ContractReport, now: datetime) -> str:
         lines.append(f"- {rule.label} ({rule.kind.value}, {when}): {r.status.value}{done}{history}. "
                      f"Advice: {rule.advice} Why: {rule.why}")
     return "\n".join(lines)
+
+
+def owner_context(about: str, situation: str = "", until: str = "") -> str:
+    """The owner's lasting context plus what's going on right now (and for how long)."""
+    parts = [f"About me: {about.strip()}" if about.strip() else "",
+             f"Right now ({until}): {situation.strip()}" if situation.strip() else ""]
+    return "\n".join(p for p in parts if p)
 
 
 def _recommend(role: str, focus: str, facts: str, context: str, voice: str) -> str:

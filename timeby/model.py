@@ -115,6 +115,7 @@ class Event:
     goal: str | None = None  # rule id when the owner tied this event to a goal (beats window-based guessing)
     duration: int | None = None  # minutes, as the owner entered them (never used for scoring)
     note: str = ""               # the owner's optional context
+    quality: str | None = None   # how it went, as the owner rated it: good / okay / poor (context, never scored)
 
 
 @dataclass(frozen=True)

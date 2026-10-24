@@ -5,7 +5,7 @@ from dataclasses import replace
 from datetime import date, datetime, timedelta
 from typing import Protocol
 
-from . import engine, intents, narration, personal
+from . import context, engine, intents, narration, personal
 from . import tone as tones
 from .recovery import RecoveryPlan, build_recovery
 from .model import Contract, ContractReport, Event, Message, Profile, Recommendation, Rule, RuleKind, RuleResult, Status
@@ -39,6 +39,7 @@ class Assistant:
         self.late_starts: dict[date, RecoveryPlan] = {}       # recovery plan of a day that started late
         self.skipped: set[tuple[date, str, str]] = set()      # goals the recovery plan dropped (no reminders)
         self.agent_context: dict[str, str] = {}               # owner's extra context per agent (AI recommendations)
+        self.agent_situation: dict[str, context.Situation] = {}  # owner's "right now" per agent (travelling …), expires
         self.tone = tones.DEFAULT                              # voice of every message (facts never change)
         self.tracked_from: dict[date, datetime] | None = None  # live: when each day's tracking started
         self.planned: list[Event] = []  # owner's records for later today: counted only once their time comes
@@ -308,7 +309,7 @@ class Assistant:
         return result
 
     def update_record(self, action: str, at: datetime, now: datetime, *, to: datetime, new_action: str,
-                      duration: int | None, note: str) -> None:
+                      duration: int | None, note: str, quality: str | None = None) -> None:
         """Change the owner's own record: its time (any time today — later = a plan that counts once its time
         comes), what it was, how long it took and the note."""
         event = self._record(action, at)
@@ -316,7 +317,8 @@ class Assistant:
         if self.ctx.logical_day(to) != self.ctx.logical_day(now):
             raise ValueError("pick a time today")
         self.delete_record(action, at)
-        changed = replace(event, action=new_action, at=to, duration=duration, note=note.strip())
+        changed = replace(event, action=new_action, at=to, duration=duration, note=note.strip(),
+                          quality=context.check_quality(quality))
         target = self.planned if to > now else self.events
         target.append(changed)
         target.sort(key=lambda e: e.at)
@@ -344,17 +346,40 @@ class Assistant:
         return e.action in rule.actions and result.start <= e.at < result.end
 
     def annotate(self, contract_id: str, rule_id: str, now: datetime,
-                 duration: int | None = None, comment: str = "") -> None:
-        self.notes[(self.ctx.logical_day(now), contract_id, rule_id)] = {"duration": duration, "comment": comment.strip()}
+                 duration: int | None = None, comment: str = "", quality: str | None = None) -> None:
+        self.notes[(self.ctx.logical_day(now), contract_id, rule_id)] = {
+            "duration": duration, "comment": comment.strip(), "quality": context.check_quality(quality)}
+
+    def rate_goal(self, contract_id: str, rule_id: str, now: datetime, quality: str | None, comment: str) -> None:
+        """How it went ("done, but only soup at the airport"): keeps the duration already noted."""
+        self._lookup((contract_id, rule_id), now)
+        note = self.notes.get((self.ctx.logical_day(now), contract_id, rule_id), {})
+        self.annotate(contract_id, rule_id, now, note.get("duration"), comment, quality)
+
+    def rate_record(self, action: str, at: datetime, quality: str | None, note: str) -> None:
+        event = self._record(action, at)
+        target = self.planned if event in self.planned else self.events
+        target[target.index(event)] = replace(event, quality=context.check_quality(quality), note=note.strip())
+
+    def set_situation(self, contract_id: str, text: str, scope: str, now: datetime) -> None:
+        self._check_agent(contract_id)
+        self.agent_situation[contract_id] = context.situation(text, scope, self.ctx.logical_day(now))
+
+    def situation_of(self, contract_id: str, now: datetime) -> context.Situation | None:
+        s = self.agent_situation.get(contract_id)
+        return s if s and s.active(self.ctx.logical_day(now)) else None
 
     def notes_for(self, day: date) -> dict[tuple[str, str], dict]:
         return {(c, r): n for (d, c, r), n in self.notes.items() if d == day}
 
     # --- control: agents (contracts) and their goals (rules) can be switched off -------------
 
-    def set_enabled(self, contract_id: str, enabled: bool, rule_id: str | None = None) -> None:
+    def _check_agent(self, contract_id: str) -> None:
         if not any(c.id == contract_id for c in self.contracts):
             raise ValueError(f"unknown agent '{contract_id}'")
+
+    def set_enabled(self, contract_id: str, enabled: bool, rule_id: str | None = None) -> None:
+        self._check_agent(contract_id)
         target, key = (self.disabled_rules, (contract_id, rule_id)) if rule_id else (self.disabled_contracts, contract_id)
         target.discard(key) if enabled else target.add(key)
 

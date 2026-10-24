@@ -88,6 +88,13 @@ scoring of situation/state) must be deterministic and grounded — never random,
   with "takes ~30 min". Any task can have a deadline (overdue / due today / due soon beat the rhythm; pace says if
   an ongoing one makes its deadline). Not a science
   contract: no score, no reminders. The demo seeds a sample book and course.
+- Agent context (`context.py`, Context block in each agent's panel on the Agents tab — moved out of ⚙︎): "Now" = the
+  agent's own status lines (today so far, the owner's feedback, what the week needs; `now_lines`), "Right now" = the
+  owner's situation with a scope that expires (today / this week / until cleared; `Assistant.set_situation`), and
+  "About you" (lasting `agent_context`). All three go to Claude (`facts_for(status=…)`, `owner_context`).
+- How it went: after anything is marked done, a check-in above the Now card asks Good / Okay / Not ideal + a note
+  (op `feedback` → `Assistant.rate_goal` / `rate_record`; `Event.quality`, notes["quality"]). Shown on the row and in
+  the agent's "Now"; the editors have the same rating. Context only — never changes the science-based score.
 - Rule `off_by_default` = opt-in goal (the 9–5 job topic): off until the owner switches it on in ⚙︎.
 - Claude API key: set in Assistant ⚙︎, stored by `keystore.py` in the macOS Keychain (else ~/.config/timeby, 0600),
   never in the project/data folder, only ever shown masked; `ai.use_key_source` reads it.

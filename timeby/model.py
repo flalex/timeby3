@@ -112,6 +112,8 @@ class Event:
     action: str
     at: datetime
     goal: str | None = None  # rule id when the owner tied this event to a goal (beats window-based guessing)
+    duration: int | None = None  # minutes, as the owner entered them (never used for scoring)
+    note: str = ""               # the owner's optional context
 
 
 @dataclass(frozen=True)
@@ -135,6 +137,7 @@ class RuleResult:
     estimated: bool = False            # anchor not observed yet: times are based on the plan
     reminder: Reminder | None = None   # the one scheduled reminder for this rule today
     hit_at: datetime | None = None     # when today's matching action happened
+    hit_action: str | None = None      # which of the rule's actions it was (e.g. a run for "Move")
     until: datetime | None = None      # avoid only: when the limit lifts (end, or `reopens` next day)
 
 

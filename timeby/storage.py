@@ -58,7 +58,8 @@ class LiveStore:
 
     def _day(self, a: Assistant, day: date) -> dict:
         on_day = lambda keys: sorted(list(k[1:]) for k in keys if k[0] == day)
-        records = lambda events: [{"action": e.action, "at": e.at.isoformat(timespec="minutes"), "goal": e.goal}
+        records = lambda events: [{"action": e.action, "at": e.at.isoformat(timespec="minutes"), "goal": e.goal,
+                                   **({"duration": e.duration} if e.duration else {}), **({"note": e.note} if e.note else {})}
                                   for e in events if a.ctx.logical_day(e.at) == day]
         return {
             "day": day.isoformat(),
@@ -105,7 +106,8 @@ class LiveStore:
     @staticmethod
     def _restore_day(a: Assistant, d: dict) -> None:
         day = date.fromisoformat(d["day"])
-        records = lambda key: [Event(e["action"], datetime.fromisoformat(e["at"]), e.get("goal")) for e in d.get(key, [])]
+        records = lambda key: [Event(e["action"], datetime.fromisoformat(e["at"]), e.get("goal"), e.get("duration"),
+                                     e.get("note", "")) for e in d.get(key, [])]
         a.events += records("events")
         a.planned += records("planned")
         a.notes |= {(day, *_unkey(k)): note for k, note in d.get("notes", {}).items()}

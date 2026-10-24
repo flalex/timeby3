@@ -51,10 +51,11 @@ body.live .demo-only { display: none !important; }
 @media (max-width: 860px) { .layout { grid-template-columns: 1fr; padding: 16px; } }
 
 /* left column: agents (product) + agent activity (demo) */
-.left { position: sticky; top: 76px; max-height: calc(100vh - 100px); display: flex; flex-direction: column; gap: 16px; min-height: 0; }
-@media (max-width: 1240px) { .left { position: static; max-height: none; grid-column: 1 / -1; order: 3; display: grid; grid-template-columns: 1fr 1fr; align-items: start; } }
+/* a definite height, so a long list scrolls inside its card instead of running off the sticky column */
+.left { position: sticky; top: 76px; height: calc(100vh - 100px); display: flex; flex-direction: column; gap: 16px; min-height: 0; }
+@media (max-width: 1240px) { .left { position: static; height: auto; grid-column: 1 / -1; order: 3; display: grid; grid-template-columns: 1fr 1fr; align-items: start; } }
 @media (max-width: 860px) { .left { grid-template-columns: 1fr; } }
-.agents { background: var(--surface); border-radius: 16px; padding: 16px; box-shadow: var(--shadow); overflow-y: auto; flex: none; max-height: 60%; }
+.agents { background: var(--surface); border-radius: 16px; padding: 16px; box-shadow: var(--shadow); overflow: hidden auto; flex: 0 1 auto; min-height: 0; }
 @media (max-width: 1240px) { .agents { max-height: none; } }
 .ltabs { display: flex; gap: 2px; margin: -6px -6px 8px; }
 .ltabs button { border: 0; background: none; padding: 6px 10px; border-radius: 8px; font-size: 13px; font-weight: 700;
@@ -62,17 +63,12 @@ body.live .demo-only { display: none !important; }
 .ltabs button.on { background: var(--surface-2); color: var(--ink); }
 #lpane-agents[hidden], #lpane-connectors[hidden] { display: none; }
 .topic { font-size: 11px; font-weight: 700; color: var(--faint); text-transform: uppercase; letter-spacing: .06em; padding: 8px 0 2px; list-style: none; }
-.conn-group { font-size: 11px; font-weight: 700; color: var(--faint); text-transform: uppercase; letter-spacing: .06em; padding: 12px 0 0; }
-.conn { border-top: 1px solid var(--line); padding: 12px 0; display: grid; grid-template-columns: 30px 1fr; gap: 4px 10px; }
-.conn .ic { font-size: 20px; }
-.conn .top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
-.conn .st { font-size: 11px; border-radius: 999px; padding: 1px 8px; background: var(--surface-2); color: var(--muted); white-space: nowrap; }
-.conn .st.proposed { background: var(--warn-soft); color: var(--warn); }
-.conn .prov { font-size: 12px; color: var(--muted); }
-.conn .does { grid-column: 2; font-size: 13px; color: var(--muted); }
-.conn .auto { grid-column: 2; display: flex; flex-wrap: wrap; gap: 4px; }
-.conn .auto span { font-size: 11px; border: 1px solid var(--line); border-radius: 999px; padding: 1px 7px; color: var(--muted); }
-.conn .btn { grid-column: 2; justify-self: start; padding: 6px 12px; font-size: 13px; margin-top: 4px; }
+.mini.word { font: 600 11px/1.5 inherit; font-family: inherit; white-space: nowrap; }
+.mini.none { background: var(--surface-2); color: var(--muted); }
+.su .auto { display: flex; flex-wrap: wrap; gap: 4px; }
+.su .auto span, .insight .auto span { font-size: 12px; border: 1px solid var(--line); border-radius: 999px; padding: 2px 9px; color: var(--muted); }
+.insight .auto { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.insight .setup-sum { font-size: 12px; color: var(--muted); margin-top: 8px; }
 .agents .hint { font-size: 12px; color: var(--muted); margin: 4px 0 8px; }
 .agent { border-top: 1px solid var(--line); padding: 10px 0 4px; }
 .agent-head { display: flex; align-items: center; gap: 6px; }
@@ -133,7 +129,7 @@ body.live .demo-only { display: none !important; }
 .switch input:checked + span { background: var(--accent); }
 .switch input:checked + span::before { left: calc(100% - (100% - 18px) - 3px); }
 .switch input:disabled + span { cursor: not-allowed; }
-.activity { background: var(--demo); color: var(--demo-ink); border-radius: 16px; padding: 16px; display: flex; flex-direction: column; min-height: 160px; flex: 1; overflow: hidden; }
+.activity { background: var(--demo); color: var(--demo-ink); border-radius: 16px; padding: 16px; display: flex; flex-direction: column; min-height: 160px; flex: 1 0 160px; overflow: hidden; }
 @media (max-width: 1240px) { .activity { max-height: 420px; } }
 .activity h3 { margin: 0; font-size: 12px; text-transform: uppercase; letter-spacing: .07em; }
 .activity .hint { font-size: 12px; color: var(--demo-muted); margin: 4px 0 10px; }
@@ -157,15 +153,18 @@ body.live .demo-only { display: none !important; }
 .btn.primary { background: var(--accent); color: var(--accent-ink); }
 .btn.secondary { background: var(--surface); color: var(--ink); box-shadow: var(--shadow); }
 .menu { position: absolute; right: 0; top: calc(100% + 8px); background: var(--surface); border-radius: 14px; padding: 6px; box-shadow: 0 12px 32px rgba(0,0,0,.14);
-  display: grid; grid-template-columns: 1fr 1fr; gap: 2px; width: 280px; z-index: 5; }
+  display: grid; grid-template-columns: 1fr 1fr; gap: 2px; width: 320px; z-index: 5; }
 .menu[hidden] { display: none; }
 .menu button { border: 0; background: none; text-align: left; padding: 8px 10px; border-radius: 8px; font-size: 14px; display: flex; gap: 8px; }
 .menu button:hover { background: var(--surface-2); }
 .menu .when { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 10px 8px;
   font-size: 13px; color: var(--muted); border-bottom: 1px solid var(--line); margin-bottom: 4px; }
+.menu .when label { display: flex; align-items: center; gap: 6px; }
+.menu .when input[type=number] { width: 56px; }
 .menu .when input { font: inherit; font-size: 14px; color: var(--ink); background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; padding: 4px 6px; }
 .row.past.rec { opacity: .85; }
-.row.planned-rec .dur { border-style: dashed; }
+.name .tag { font-size: 11.5px; color: var(--faint); white-space: nowrap; }
+.row.planned-rec .tag { color: var(--accent); }
 .row.planned-rec .mark.rec { border-style: dashed; }
 .mark.rec { background: var(--surface-2); border: 1.5px solid var(--line); }
 .row.future.skipped > :not(.linkbtn) { opacity: .6; }
@@ -286,6 +285,11 @@ body.live .demo-only { display: none !important; }
 .editor input[type=number] { width: 72px; }
 input.tm { width: 76px; text-align: center; }
 .editor textarea { width: 100%; min-height: 54px; resize: vertical; }
+.editor select { font: inherit; font-size: 14px; color: var(--ink); background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; max-width: 220px; }
+.note-fold summary { cursor: pointer; font-size: 13px; color: var(--accent); font-weight: 600; list-style: none; width: max-content; }
+.note-fold summary::-webkit-details-marker { display: none; }
+.note-fold[open] .add, .note-fold:not([open]) .lbl { display: none; }
+.note-fold[open] summary { color: var(--muted); font-weight: 500; margin-bottom: 6px; }
 .editor .acts { display: flex; gap: 8px; }
 .ed-hint { font-size: 12px; color: var(--faint); }
 .ed-err { font-size: 13px; color: var(--bad); }
@@ -399,7 +403,7 @@ body.week .day-only { display: none !important; }
         <div id="agents"></div>
       </div>
       <div id="lpane-connectors" hidden>
-        <p class="hint">Where the agents get data and where they act. Not connected yet — coming next.</p>
+        <p class="hint">Where the agents get data and where they act. Open one for what it does; ⚙︎ sets it up.</p>
         <div id="connectors"></div>
       </div>
     </section>
@@ -478,6 +482,23 @@ function parseClock(text) {
   return h > 23 || min > 59 ? "" : `${String(h).padStart(2, "0")}:${String(min).padStart(2, "0")}`;
 }
 const readTime = (id) => parseClock($(id)?.value);
+
+// ---------- fields shared by every editor: activity, duration, an optional folded note ----------
+const actionOption = (a, current) => `<option value="${a}" ${a === current ? "selected" : ""}>${ICONS[a] || ""} ${SHORT[a] || a}</option>`;
+/** Every loggable activity; with `counts`, the goal's own activities first (others move the record out of the goal). */
+function activityField(id, current, counts = null) {
+  const all = Object.keys(SHORT);
+  const options = counts
+    ? `<optgroup label="Counts for this goal">${counts.map((a) => actionOption(a, current)).join("")}</optgroup>
+       <optgroup label="Something else (becomes your own record)">${all.filter((a) => !counts.includes(a)).map((a) => actionOption(a, current)).join("")}</optgroup>`
+    : all.map((a) => actionOption(a, current)).join("");
+  return `<label>Activity <select id="${id}">${options}</select></label>`;
+}
+const durationField = (id, minutes) =>
+  `<label>Duration <input type="number" id="${id}" min="1" step="5" value="${minutes ?? ""}" placeholder="—"> min</label>`;
+/** Optional context stays out of the way until wanted. */
+const noteField = (id, text) => `<details class="note-fold" ${text ? "open" : ""}><summary><span class="add">+ Add note</span><span class="lbl">Note</span></summary>
+  <textarea id="${id}" placeholder="Anything worth remembering — how it went, where, with whom">${esc(text)}</textarea></details>`;
 const TIME_HINT = "Type a time like 16:10.";
 const dayMin = (hhmm) => { const [h, m] = hhmm.split(":").map(Number); return (h * 60 + m - 240 + 1440) % 1440; };  // day starts 04:00
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -709,18 +730,69 @@ async function askClaude(agentId) {
   renderAgents();
 }
 
+// ---------- Connectors: the same pattern as Agents — open a row for details, ⚙︎ for setup ----------
+const CONNECTOR_SETUP = {};  // id -> { html(), bind(), summary?() } — registered by calendar.js and messenger.js
+const openConnectors = new Set();
+const CONN_TONE = { connected: "", proposed: "mid" };
+const connDialog = document.createElement("dialog");
+connDialog.className = "su";
+connDialog.setAttribute("aria-labelledby", "conn-title");
+document.body.append(connDialog);
+let connOpenId = null;
+connDialog.addEventListener("close", () => (connOpenId = null));
+
 function renderConnectors() {
-  $("connectors").innerHTML = S.connectors.map((c, i) => `${c.group !== S.connectors[i - 1]?.group ? `<div class="conn-group">${esc(c.group)}</div>` : ""}<div class="conn"><span class="ic">${c.icon}</span>
-    <div><div class="top"><b>${esc(c.name)}</b><span class="st ${c.status === "proposed" ? "proposed" : ""}">${esc(c.status)}</span></div>
-      <div class="prov">${esc(c.providers)}</div></div>
-    <div class="does">${esc(c.does)}</div>
-    ${c.automates.length ? `<div class="auto">${c.automates.map((g) => `<span>${esc(g)}</span>`).join("")}</div>` : ""}
-    <button class="btn secondary" data-connect="${c.id}">Connect</button></div>`).join("");
-  $("connectors").querySelectorAll("[data-connect]").forEach((b) => (b.onclick = () => {
-    const c = S.connectors.find((x) => x.id === b.dataset.connect);
-    showToast({ kind: "info", at: S.clock, text: `${c.name} connector is coming soon.` });
+  $("connectors").innerHTML = S.connectors.map((c, i) =>
+    `${c.group !== S.connectors[i - 1]?.group ? `<div class="topic">${esc(c.group)}</div>` : ""}${connectorRow(c)}`).join("");
+  $("connectors").querySelectorAll("[data-cfold]").forEach((b) => (b.onclick = () => {
+    const id = b.dataset.cfold;
+    openConnectors.has(id) ? openConnectors.delete(id) : openConnectors.add(id);
+    renderConnectors();
   }));
+  $("connectors").querySelectorAll("[data-cset]").forEach((b) => (b.onclick = () => openConnectorSetup(b.dataset.cset)));
 }
+
+function connectorRow(c) {
+  const open = openConnectors.has(c.id);
+  return `<div class="agent ${open ? "open" : ""}">
+    <div class="agent-head">
+      <button class="fold-agent" data-cfold="${c.id}" aria-expanded="${open}" title="${open ? "Hide" : "Show"} details">
+        <span class="chev">›</span><span><b>${c.icon} ${esc(c.name)}</b><span class="dom">${esc(c.providers)}</span></span></button>
+      <span class="mini word ${CONN_TONE[c.status] ?? "none"}">${esc(c.status)}</span>
+      <button class="gear" data-cset="${c.id}" aria-label="Set up ${esc(c.name)}" title="Set up ${esc(c.name)}">⚙︎</button></div>
+    ${open ? `<div class="insight"><p class="agoal">${esc(c.does)}</p>${automates(c)}
+      ${CONNECTOR_SETUP[c.id]?.summary ? `<div class="setup-sum">${CONNECTOR_SETUP[c.id].summary()}</div>` : ""}</div>` : ""}
+  </div>`;
+}
+
+function automates(c, inDialog = false) {
+  if (!c.automates.length) return "";
+  const heading = inDialog ? "<h3>Logs automatically</h3>" : `<div class="topic">Logs automatically</div>`;
+  return `${heading}<div class="auto">${c.automates.map((g) => `<span>${esc(g)}</span>`).join("")}</div>`;
+}
+
+function openConnectorSetup(id) {
+  connOpenId = id;
+  renderConnectorDialog();
+  connDialog.showModal();
+}
+
+function renderConnectorDialog() {
+  const c = S.connectors.find((x) => x.id === connOpenId);
+  if (!c) return;
+  const setup = CONNECTOR_SETUP[c.id];
+  connDialog.innerHTML = `<form method="dialog">
+    <h2 id="conn-title">${c.icon} ${esc(c.name)}</h2>
+    <p class="su-sub">${esc(c.does)}</p>
+    <h3>Set up</h3>
+    ${setup ? `<div class="conn-setup">${setup.html()}</div>` : `<div class="su-msg warn">Coming soon · ${esc(c.providers)}</div>`}
+    ${automates(c, true)}
+    <div class="su-actions"><button class="btn secondary">Close</button></div></form>`;
+  setup?.bind();
+}
+
+/** Feature scripts call this after a setup action, so the open dialog shows the new state. */
+const refreshConnectorDialog = () => { if (connOpenId && connDialog.open) renderConnectorDialog(); };
 
 function logControl(what, name) {
   $("feed").querySelector(".empty")?.remove();
@@ -816,10 +888,12 @@ function recordRow(r) {
   const open = editing === recordKey(r);
   return `<div class="row ${r.planned ? "later planned-rec" : "past"} rec ${open ? "editing" : ""}" data-edit-rec="${recordKey(r)}" title="Click to change the time or delete">
     ${timeCell(r.at, r)}<span class="mark rec">${ICONS[r.action] || "•"}</span>
-    <span class="name"><span>${esc(r.title)}</span><span class="dur">${r.planned ? "planned" : "your record"}</span></span>
+    <span class="name"><span>${esc(r.title)}</span>${comment(r)}${durationTag(r)}<span class="tag">${r.planned ? "planned" : "your record"}</span></span>
     <span class="meta">${r.planned ? `counts at ${r.at}` : esc(r.source)}</span></div>
     ${open ? `<div class="editor" id="rec-editor">
-      <div class="fields"><label>Time ${timeField("rec-at", r.at)}</label><span class="ed-hint">${RECORD_TIME_HINT}</span></div>
+      <div class="fields">${activityField("rec-act", r.action)}<label>Time ${timeField("rec-at", r.at)}</label>${durationField("rec-dur", r.duration)}</div>
+      <span class="ed-hint">${RECORD_TIME_HINT}</span>
+      ${noteField("rec-note", r.comment)}
       <div class="ed-err" id="rec-err" hidden></div>
       <div class="acts"><button class="btn primary" id="rec-save">Save</button><button class="btn secondary" id="rec-delete">Delete</button>
         <button class="btn secondary" id="rec-cancel">Cancel</button></div></div>` : ""}`;
@@ -905,12 +979,13 @@ function editorHtml(i) {
     <div class="seg2"><button data-h="1" class="${yes[1]} ${happened ? "on" : ""}">${yes[0]}</button>
       <button data-h="0" class="${no[1]} ${happened ? "" : "on"}">${no[0]}</button></div>
     <div class="fields">
+      ${avoid ? "" : activityField("ed-act", i.edit.action, i.edit.counts)}
       <label>${avoid ? "When" : "Time"} ${timeField("ed-at", i.edit.at)}</label>
-      ${avoid ? "" : `<label>Duration <input type="number" id="ed-dur" min="0" step="5" value="${i.duration ?? ""}"> min</label>`}
+      ${avoid ? "" : durationField("ed-dur", i.duration)}
     </div>
       <span class="ed-hint">${avoid ? `between ${i.edit.min} and ${i.edit.until_now ? "now" : i.edit.max}` : "any time today — later today means planned"}</span>
     ${i.late_note ? `<p class="ed-note">${esc(i.late_note)}</p>` : ""}
-    <textarea id="ed-cmt" placeholder="Add a comment">${esc(i.comment)}</textarea>
+    ${noteField("ed-cmt", i.comment)}
     <div class="ed-err" id="ed-err" hidden></div>
     <div class="acts"><button class="btn primary" id="ed-save">Save</button>
       ${happened ? `<button class="btn secondary" id="ed-delete" title="Remove what was recorded — the goal goes back to how it stands without it">Delete record</button>` : ""}
@@ -1006,7 +1081,8 @@ function bindRecordEditor() {
   $("rec-save").onclick = async () => {
     const to = readTime("rec-at");
     if (!to) return showError("rec-err", TIME_HINT);
-    if (await applyChange("record", { action: "move", record, to }, "rec-err")) logControl("Record moved", `${r.title} → ${to}`);
+    const body = { action: "update", record, to, new_action: $("rec-act").value, duration: $("rec-dur").value, note: $("rec-note").value };
+    if (await applyChange("record", body, "rec-err")) logControl("Record edited", `${SHORT[body.new_action] || body.new_action} ${to}`);
   };
   $("rec-delete").onclick = async () => (await applyChange("record", { action: "delete", record }, "rec-err"))
     && logControl("Record deleted", `${r.title} ${r.at}`);
@@ -1030,8 +1106,8 @@ function bindPlanEditor() {
 }
 
 // --- + Log: any action, now or earlier today, always confirmed ---
-async function logNow(action, at = null) {
-  const body = at && at !== S.clock ? { action, at } : { action };
+async function logNow(action, at = null, duration = "") {
+  const body = { action, ...(at && at !== S.clock ? { at } : {}), ...(duration ? { duration } : {}) };
   try {
     const data = await post("log", body);
     S = data.state;
@@ -1065,7 +1141,8 @@ function bindEditor() {
     ed.querySelectorAll(".seg2 button").forEach((x) => x.classList.toggle("on", (x.dataset.h === "1") === h));
   };
   ed.querySelectorAll(".seg2 button").forEach((b) => (b.onclick = () => choose(b.dataset.h === "1")));
-  $("ed-at").oninput = () => choose(true);  // picking a time means it happened then
+  $("ed-at").oninput = () => choose(true);  // picking a time or an activity means it happened
+  if ($("ed-act")) $("ed-act").onchange = () => choose(true);
   $("ed-cancel").onclick = () => { editing = null; renderToday(); };
   $("ed-save").onclick = async () => {
     const at = readTime("ed-at");
@@ -1073,7 +1150,7 @@ function bindEditor() {
     if (problem) return showError("ed-err", problem);
     const planned = happened && item.kind !== "avoid" && dayMin(at) > dayMin(currentClock());
     const what = !happened ? (item.kind === "avoid" ? "kept" : "missed") : planned ? `planned ${at}` : item.kind === "avoid" ? `broken ${at}` : `done ${at}`;
-    await saveEdit(item, { happened, at, duration: $("ed-dur")?.value || "", comment: $("ed-cmt").value }, what);
+    await saveEdit(item, { happened, at, action: $("ed-act")?.value || "", duration: $("ed-dur")?.value || "", comment: $("ed-cmt").value }, what);
   };
   const del = $("ed-delete");
   if (del) del.onclick = () => saveEdit(item, { happened: false, at: "", duration: "", comment: "" }, "record deleted");
@@ -1107,17 +1184,18 @@ $("ltabs").querySelectorAll("button").forEach((b) => (b.onclick = () => { ltab =
 $("viewseg").querySelectorAll("button").forEach((b) => (b.onclick = () => setView(b.dataset.view)));
 $("scenario").onchange = () => restart();
 $("toast").onclick = () => $("toast").classList.remove("show");
-$("menu").innerHTML = `<label class="when">When ${timeField("log-at", "")}</label>` +
+$("menu").innerHTML = `<div class="when"><label>When ${timeField("log-at", "")}</label>
+    <label>Duration <input type="number" id="log-dur" min="1" step="5" placeholder="—"> min</label></div>` +
   Object.entries(SHORT).map(([a, label]) => `<button data-a="${a}">${ICONS[a]} ${label}</button>`).join("");
 function showLogMenu(open) {
   $("menu").hidden = !open;
   $("log-btn").setAttribute("aria-expanded", open);
-  if (open) $("log-at").value = currentClock();
+  if (open) { $("log-at").value = currentClock(); $("log-dur").value = ""; }
 }
 $("log-btn").onclick = (e) => { e.stopPropagation(); showLogMenu($("menu").hidden); };
 $("menu").onclick = (e) => e.stopPropagation();  // picking a time must not close the menu
 document.addEventListener("click", () => showLogMenu(false));
-$("menu").querySelectorAll("button").forEach((b) => (b.onclick = () => { showLogMenu(false); logNow(b.dataset.a, readTime("log-at") || currentClock()); }));
+$("menu").querySelectorAll("button").forEach((b) => (b.onclick = () => { showLogMenu(false); logNow(b.dataset.a, readTime("log-at") || currentClock(), $("log-dur").value); }));
 $("suggest").innerHTML = ["What should I do now?", "How am I doing?", "Why?"].map((q) => `<button>${q}</button>`).join("");
 $("suggest").querySelectorAll("button").forEach((b) => (b.onclick = () => api("say", { text: b.textContent })));
 $("form").onsubmit = (e) => { e.preventDefault(); const t = $("text").value.trim(); if (t) { $("text").value = ""; api("say", { text: t }); } };

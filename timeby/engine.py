@@ -113,13 +113,14 @@ def _earned(rule: Rule, status: Status) -> float | None:
 
 
 def _result(rule: Rule, ctx: Context, day: date, status: Status, earned: float | None,
-            detail: str = "", hit_at: datetime | None = None, end: datetime | None = None) -> RuleResult:
+            detail: str = "", hit: Event | None = None, end: datetime | None = None) -> RuleResult:
     anchor_at = rule_anchor(rule, ctx, day)
     start, planned_end = bounds(rule.window, anchor_at)
     end = end or planned_end
     until = ctx.planned_anchor(rule.reopens, day + timedelta(days=1)) if rule.reopens else end
     return RuleResult(rule, status, earned, start, end, anchor_at + timedelta(minutes=deadline_offset(rule)),
-                      detail, anchor_at, _is_estimated(rule, ctx, day), reminder(rule, anchor_at), hit_at, until)
+                      detail, anchor_at, _is_estimated(rule, ctx, day), reminder(rule, anchor_at),
+                      hit.at if hit else None, hit.action if hit else None, until)
 
 
 def _is_estimated(rule: Rule, ctx: Context, day: date) -> bool:
@@ -161,16 +162,16 @@ def _judge_window(rule: Rule, ctx: Context, now: datetime) -> RuleResult:
         hits = on_time or hits
     else:
         status = Status.VIOLATED if hit else Status.CLEAN if over else Status.PENDING
-    return _result(rule, ctx, day, status, _earned(rule, status), hit_at=hits[0].at if hits else None, end=end)
+    return _result(rule, ctx, day, status, _earned(rule, status), hit=hits[0] if hits else None, end=end)
 
 
-def _closest_hit(rule: Rule, ctx: Context, day: date, now: datetime) -> tuple[bool, datetime | None, bool]:
-    """(judgeable, when the action happened, untracked). None = skipped once the window closed."""
+def _closest_hit(rule: Rule, ctx: Context, day: date, now: datetime) -> tuple[bool, Event | None, bool]:
+    """(judgeable, the event that happened, untracked). None = skipped once the window closed."""
     target = _target(rule, ctx, day)
     start, end = bounds(rule.window, target)
     hits = ctx.matching(rule, start, end, now, day)
     if hits:
-        return True, min(hits, key=lambda e: abs(e.at - target)).at, False
+        return True, min(hits, key=lambda e: abs(e.at - target)), False
     return now >= end, None, now >= end and ctx.untracked(day, end)
 
 
@@ -181,12 +182,12 @@ def _judge_regularity(rule: Rule, ctx: Context, now: datetime) -> RuleResult:
     judged, on_time, credit, devs, today_status, today_hit = 0, 0, 0.0, [], Status.PENDING, None
 
     for day in (d for d in days if d >= first):
-        judgeable, hit_at, untracked = _closest_hit(rule, ctx, day, now)
+        judgeable, hit, untracked = _closest_hit(rule, ctx, day, now)
         if untracked and day == today:
             today_status = Status.UNTRACKED
         if not judgeable or untracked:
             continue
-        dev = round((hit_at - _target(rule, ctx, day)).total_seconds() / 60) if hit_at else None
+        dev = round((hit.at - _target(rule, ctx, day)).total_seconds() / 60) if hit else None
         ok = dev is not None and abs(dev) <= rule.tolerance
         status = Status.DONE if ok else Status.LATE if dev is not None else Status.MISSED
         judged += 1
@@ -195,7 +196,7 @@ def _judge_regularity(rule: Rule, ctx: Context, now: datetime) -> RuleResult:
         if dev is not None:
             devs.append(dev)
         if day == today:
-            today_status, today_hit = status, hit_at
+            today_status, today_hit = status, hit
 
     earned = rule.weight * credit / judged if judged else None
     return _result(rule, ctx, today, today_status, earned, _regularity_detail(rule, judged, on_time, devs), today_hit)

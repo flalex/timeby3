@@ -42,7 +42,9 @@ scoring of situation/state) must be deterministic and grounded — never random,
   recovery plan (now / moved with wake-up / late but worth it / skipped / unchanged + combine tips). While the owner
   is still asleep only the wake-up call is sent. Late-but-done earns `late_credit` (default 0.5, status LATE).
   Rules can declare `pairs` (goals to do together), `topic` (grouping), `remind: false` (companion goals).
-- `connectors.py`: declared connectors (calendar, fitness tracker, location) — UI only, not implemented.
+- `connectors.py`: declared connectors (calendar, fitness tracker, location, telegram). The Connectors tab uses the
+  Agents pattern: rows fold open for details, ⚙︎ opens the setup dialog; feature scripts register a setup in
+  `CONNECTOR_SETUP[id] = {html, bind, summary}` and call `refreshConnectorDialog()` after actions.
 - Demo readiness (see `docs/next/`): `web/story.js` = Story mode (6 chapters on the real engine; uses the default
   day, restores the owner's setup on exit); `personal.py` + `web/setup.js` = the agent ⚙︎ dialog: its day times, goals
   on/off + weekdays, and (live) context for Claude
@@ -57,8 +59,11 @@ scoring of situation/state) must be deterministic and grounded — never random,
   progress = on-time / judged; rule `weekly_target` (default 5/7 of planned days) → met / on track / at risk /
   critical / out of reach with the reason; "Needs you today" = critical or at-risk goals still doable today.
   The v3 demo simulates Wednesday of the current week so the week has a past.
-- Owner edits: every own record shows in the timeline (unless a goal row already shows it) and can be moved/deleted
-  (`Assistant.move_record/delete_record`); + Log takes "when" (any time today). A time later today = a plan
+- Owner edits: every own record shows in the timeline (unless a goal row already shows it) and can be edited —
+  activity, time, duration, optional folded note (`Event.duration/note`, `Assistant.update_record/delete_record`);
+  Log activity takes "when" (any time today) and an optional duration. A goal's editor can switch the activity: one
+  of the goal's own actions keeps it on the goal (`correct(action=…)`, `RuleResult.hit_action`), any other moves it
+  out as an own record (a workout that was really a run). A time later today = a plan
   (`Assistant.planned`, saved as "planned" in the day file): never seen by the engine until its time comes, then
   counted (tick) with a note so a changed plan is one delete away. A done goal set to a later time becomes such a plan;
   done goals also have "Delete record" (the goal goes back to how it stands without it). Upcoming goals can be moved to another

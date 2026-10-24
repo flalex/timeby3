@@ -151,6 +151,7 @@ def _extras(rep: ContractReport, r: RuleResult, item: dict, note: dict, wake: Wa
         earliest, latest = (r.start, min(r.end - timedelta(minutes=1), now)) if rule.kind is RuleKind.AVOID \
             else (day_start, now)
         extras["edit"] = {"happened": happened, "at": f"{min(default_at, latest):%H:%M}",
+                          "action": r.hit_action or rule.actions[0], "counts": list(rule.actions),
                           "min": f"{earliest:%H:%M}", "max": f"{latest:%H:%M}", "until_now": latest == now}
     return extras
 

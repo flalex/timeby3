@@ -139,16 +139,17 @@ class Simulation:
         minutes = int((datetime.now() - self.now).total_seconds() // 60)
         return self.advance(minutes, stop_on_agent=False) if minutes > 0 else []
 
-    def log(self, action: str, source: str = "you", at: datetime | None = None) -> list[dict]:
+    def log(self, action: str, source: str = "you", at: datetime | None = None, duration: int | None = None,
+            note: str = "") -> list[dict]:
         """Record an action now, earlier today ("I had it at…") or later today (a plan: "surf at 18:00")."""
         at = at or self.now
         if self.assistant.ctx.logical_day(at) != self.assistant.ctx.logical_day(self.now):
             raise ValueError("pick a time today")
         self.log_sources[(action, at)] = source
         if at > self.now:
-            self.assistant.plan_record(action, at)
+            self.assistant.plan_record(action, at, duration=duration, note=note)
         else:
-            self.assistant.log(action, at)
+            self.assistant.log(action, at, duration=duration, note=note)
         return self._flush()
 
     def change_plan(self, body: dict) -> None:
@@ -165,12 +166,13 @@ class Simulation:
             raise KeyError(action)
 
     def change_record(self, body: dict) -> None:
-        """Owner fixes their own record: move it to another time today, or delete it."""
+        """Owner fixes their own record: its time, activity, duration and note — or deletes it."""
         action, at = body["record"]["action"], self._at_today(body["record"]["at"])
-        if body["action"] == "move":
-            to = self._at_today(body["to"])
-            self.assistant.move_record(action, at, to, self.now)
-            self.log_sources[(action, to)] = self.log_sources.pop((action, at), "you")
+        if body["action"] == "update":
+            to, new_action = self._at_today(body["to"]), body.get("new_action") or action
+            self.assistant.update_record(action, at, self.now, to=to, new_action=new_action,
+                                         duration=_minutes(body.get("duration")), note=body.get("note", ""))
+            self.log_sources[(new_action, to)] = self.log_sources.pop((action, at), "you")
         elif body["action"] == "delete":
             self.assistant.delete_record(action, at)
         else:
@@ -192,14 +194,22 @@ class Simulation:
         return [self._wrap(Message(self.now, "reply", "", "", "👍"))]
 
     def edit(self, body: dict) -> None:
-        """Owner corrects a past goal: what happened, when, how long, and a comment."""
+        """Owner corrects a goal: what happened (which activity), when, how long, and a note. An activity that
+        doesn't count for the goal moves out of it as the owner's own record (it wasn't a workout, it was a run)."""
         cid, rid = body["contract_id"], body["rule_id"]
+        rule = next(r for r in self._contracts[cid].rules if r.id == rid)
         at = self._at_today(body["at"]) if body.get("at") else None
-        self.assistant.correct(cid, rid, bool(body["happened"]), at, self.now)
-        if at and body["happened"]:
-            self.log_sources[(next(r for r in self._contracts[cid].rules if r.id == rid).actions[0], at)] = "you (edited)"
-        duration = int(body["duration"]) if str(body.get("duration") or "").isdigit() else None
-        self.assistant.annotate(cid, rid, self.now, duration, body.get("comment", ""))
+        happened, action = bool(body["happened"]), body.get("action") or None
+        duration, note = _minutes(body.get("duration")), body.get("comment", "")
+        if happened and action and action not in rule.actions:
+            self.assistant.correct(cid, rid, False, None, self.now)
+            self.assistant.annotate(cid, rid, self.now)
+            self.log(action, "you (edited)", at, duration, note)
+            return
+        self.assistant.correct(cid, rid, happened, at, self.now, action)
+        if at and happened:
+            self.log_sources[(action or rule.actions[0], at)] = "you (edited)"
+        self.assistant.annotate(cid, rid, self.now, duration, note)
 
     def set_profile(self, anchors: dict[str, str]) -> None:
         """New times for some or all anchors; the rest stay as they are."""
@@ -349,6 +359,7 @@ class Simulation:
         shown = {(a, r.hit_at) for rep in reports for r in rep.results if r.hit_at for a in r.rule.actions}
         ctx, a = self.assistant.ctx, self.assistant
         return [{"action": e.action, "label": a.actions[e.action], "at": f"{e.at:%H:%M}", "sort": e.at.isoformat(),
+                 "duration": e.duration, "comment": e.note,
                  "source": self.log_sources.get((e.action, e.at), "you" if self.live else "history"),
                  "on_goal": (e.action, e.at) in shown, "planned": e in a.planned, "goal": e.goal}
                 for e in [*a.events, *a.planned] if ctx.logical_day(e.at) == day]
@@ -473,6 +484,16 @@ class Simulation:
         }
 
 
+def _minutes(value) -> int | None:
+    """A duration typed by the owner: whole minutes, or None when left empty."""
+    text = str(value or "").strip()
+    if not text:
+        return None
+    if not text.isdigit() or not 0 < int(text) <= 24 * 60:
+        raise ValueError("Duration is in minutes, e.g. 45.")
+    return int(text)
+
+
 def _points(results) -> dict:
     """What the score is made of: points earned / possible over the goals judged so far (same sum as engine.evaluate)."""
     judged = [r for r in results if r.earned is not None]
@@ -497,7 +518,8 @@ def handle(sim: Simulation, op: str, body: dict) -> dict:
     elif op == "advance":
         messages = sim.advance(int(body.get("minutes", 1)), bool(body.get("stop_on_agent", True)))
     elif op == "log":
-        messages = sim.log(body["action"], at=sim._at_today(body["at"]) if body.get("at") else None)
+        messages = sim.log(body["action"], at=sim._at_today(body["at"]) if body.get("at") else None,
+                           duration=_minutes(body.get("duration")), note=body.get("note", ""))
     elif op == "plan":
         sim.change_plan(body)
         messages = []

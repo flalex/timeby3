@@ -885,7 +885,7 @@ def test_records_can_be_moved_or_deleted_and_are_listed_for_the_timeline(tmp_pat
     handle(s, "log", {"action": "meal", "at": "12:40"})       # "I had it at…": lunch, on time
     records = {r["action"]: r for r in s.state()["records"]}
     assert records["surf"]["on_goal"] is False and records["meal"]["on_goal"] is True
-    handle(s, "record", {"action": "move", "record": {"action": "surf", "at": "15:40"}, "to": "15:00"})
+    handle(s, "record", {"action": "update", "record": {"action": "surf", "at": "15:40"}, "to": "15:00"})
     handle(s, "record", {"action": "delete", "record": {"action": "meal", "at": "12:40"}})
     assert [(r["action"], r["at"]) for r in s.state()["records"]] == [("surf", "15:00")]
     handle(s, "log", {"action": "padel", "at": "18:00"})  # later today: a plan, not a fact
@@ -1070,7 +1070,7 @@ def test_a_record_moved_ahead_is_a_plan_counted_when_its_time_comes_and_saved(tm
     from timeby.server import handle
     s = live_at(tmp_path, "16:27")
     handle(s, "log", {"action": "surf", "at": "16:05"})
-    handle(s, "record", {"action": "move", "record": {"action": "surf", "at": "16:05"}, "to": "18:00"})
+    handle(s, "record", {"action": "update", "record": {"action": "surf", "at": "16:05"}, "to": "18:00"})
     assert [(e.action, f"{e.at:%H:%M}") for e in s.assistant.planned] == [("surf", "18:00")]
     assert not any(e.action == "surf" for e in s.assistant.events)
     day_file = json.loads((tmp_path / f"{DAY.isoformat()}.json").read_text())
@@ -1088,3 +1088,33 @@ def test_deleting_a_done_goal_record_reopens_the_goal():
     assert result_of(a, "workout", at("16:05")).status is Status.DONE
     a.correct("fitness", "workout", False, None, at("16:05"))
     assert result_of(a, "workout", at("16:05")).status is Status.PENDING  # window still open: back to do
+
+
+def test_records_keep_duration_and_note_and_can_change_activity(tmp_path):
+    from timeby.server import handle
+    s = live_at(tmp_path, "16:30")
+    handle(s, "log", {"action": "surf", "at": "15:00", "duration": "90"})
+    handle(s, "record", {"action": "update", "record": {"action": "surf", "at": "15:00"}, "to": "15:10",
+                         "new_action": "padel", "duration": "60", "note": "  doubles with Sam "})
+    record = next(r for r in s.state()["records"] if r["action"] == "padel")
+    assert (record["at"], record["duration"], record["comment"]) == ("15:10", 60, "doubles with Sam")
+    saved = json.loads((tmp_path / f"{DAY.isoformat()}.json").read_text())["events"]
+    assert {"action": "padel", "at": f"{DAY.isoformat()}T15:10", "goal": None, "duration": 60, "note": "doubles with Sam"} in saved
+    with pytest.raises(ValueError, match="minutes"):
+        handle(s, "log", {"action": "water", "duration": "an hour"})
+
+
+def test_goal_edit_changes_activity_within_the_goal_or_moves_it_out(tmp_path):
+    from timeby.server import handle
+    s = live_at(tmp_path, "18:30")
+    handle(s, "edit", {"contract_id": "fitness", "rule_id": "workout", "happened": True, "at": "16:00", "duration": "60"})
+    handle(s, "edit", {"contract_id": "fitness", "rule_id": "workout", "happened": True, "at": "16:00",
+                       "action": "running", "duration": "40", "comment": "it was a run"})
+    assert result_of(s.assistant, "workout", s.now).hit_at is None  # a run isn't strength training
+    run = next(r for r in s.state()["records"] if r["action"] == "running")
+    assert (run["at"], run["duration"], run["comment"]) == ("16:00", 40, "it was a run")
+    s.assistant.log("wake", at("07:00"))
+    handle(s, "edit", {"contract_id": "cortisol_rhythm", "rule_id": "morning_movement", "happened": True, "at": "08:00",
+                       "action": "running"})
+    move = result_of(s.assistant, "morning_movement", s.now)
+    assert move.status is Status.DONE and move.hit_action == "running"

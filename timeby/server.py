@@ -8,7 +8,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from importlib.util import find_spec
 from pathlib import Path
 
-from . import calendar_feed, calendar_ics, tasks
+from . import battery, calendar_feed, calendar_ics, tasks
 from .assistant import Assistant
 from .demo import PROFILE, seed_history
 from .loader import load_actions, load_contracts
@@ -391,6 +391,7 @@ class Simulation:
             "profile": self._profile(),
             "connectors": self._connectors(),
             "tasks": tasks.view(self.backlog, day),
+            "battery": battery.view(self.assistant, reports, now, self.assistant.battery_condition) if self.assistant.battery_on else None,
             "busy": [self._busy_block(m) for m in sorted(self.meetings, key=lambda m: m.start)],
         }
 
@@ -628,6 +629,12 @@ def handle(sim: Simulation, op: str, body: dict) -> dict:
         messages = []
     elif op == "feedback":
         sim.feedback(body)
+        messages = []
+    elif op == "battery":
+        if "on" in body:
+            sim.assistant.battery_on = bool(body["on"])
+        if "condition" in body:
+            sim.assistant.set_condition(body["condition"], body.get("scope") or "today", sim.now)
         messages = []
     elif op == "sensors":
         sim.sensors_on = bool(body["on"])

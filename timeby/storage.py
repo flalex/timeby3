@@ -28,6 +28,14 @@ def _key(contract_id: str, rule_id: str) -> str:
     return f"{contract_id}/{rule_id}"
 
 
+def _situation_json(s: Situation) -> dict:
+    return {"text": s.text, "scope": s.scope, "until": s.until.isoformat() if s.until else None}
+
+
+def _situation(v: dict) -> Situation:
+    return Situation(v["text"], v["scope"], date.fromisoformat(v["until"]) if v.get("until") else None)
+
+
 def _unkey(key: str) -> tuple[str, str]:
     contract_id, rule_id = key.split("/", 1)
     return contract_id, rule_id
@@ -65,8 +73,9 @@ class LiveStore:
             "disabled_agents": sorted(a.disabled_contracts),
             "disabled_goals": sorted(_key(*k) for k in a.disabled_rules),
             "agent_context": a.agent_context,
-            "agent_situation": {cid: {"text": s.text, "scope": s.scope, "until": s.until.isoformat() if s.until else None}
-                                for cid, s in a.agent_situation.items()},
+            "agent_situation": {cid: _situation_json(s) for cid, s in a.agent_situation.items()},
+            "battery_on": a.battery_on,
+            "battery_condition": _situation_json(a.battery_condition) if a.battery_condition else None,
             "tone": a.tone,
         }
 
@@ -116,8 +125,9 @@ class LiveStore:
         a.disabled_contracts = set(s.get("disabled_agents", []))
         a.disabled_rules = {_unkey(k) for k in s.get("disabled_goals", [])}
         a.agent_context = dict(s.get("agent_context", {}))
-        a.agent_situation = {cid: Situation(v["text"], v["scope"], date.fromisoformat(v["until"]) if v.get("until") else None)
-                             for cid, v in s.get("agent_situation", {}).items()}
+        a.agent_situation = {cid: _situation(v) for cid, v in s.get("agent_situation", {}).items()}
+        a.battery_on = s.get("battery_on", True)
+        a.battery_condition = _situation(s["battery_condition"]) if s.get("battery_condition") else None
         a.set_tone(s.get("tone", a.tone))
 
     @staticmethod

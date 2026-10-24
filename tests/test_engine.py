@@ -1246,3 +1246,56 @@ def test_situation_expires_and_reaches_claude_with_the_agents_status(tmp_path):
     assert again.assistant.situation_of("nutrition", at("09:00", DAY + timedelta(days=1))) is None   # "today" ended
     with pytest.raises(ValueError, match="scope"):
         handle(s, "context", {"contract_id": "nutrition", "situation": "x", "scope": "forever"})
+
+
+# --- energy battery -------------------------------------------------------------------------------
+
+def battery_at(a, now):
+    from timeby.battery import view
+    return view(a, a.status(now), now, a.battery_condition)
+
+
+def test_battery_ceiling_follows_last_nights_sleep_and_how_you_feel():
+    a = v3_assistant()
+    a.log("sleep", at("01:00"))            # short night (logical day: still DAY)
+    a.log("wake", at("07:00"))
+    b = battery_at(a, at("07:01"))
+    assert b["capacity"] == 100 - 20 and b["sleep_h"] == 6.0  # 2 h short of 8 → −20
+    a.set_condition("unwell", "today", at("07:01"))
+    assert battery_at(a, at("07:02"))["capacity"] == 50
+    assert battery_at(a, at("07:00", DAY + timedelta(days=1)))["condition"]["state"] == "well"  # "today" expired
+    a.set_condition("well", "today", at("07:03"))
+    assert a.battery_condition is None
+    with pytest.raises(ValueError, match="condition"):
+        a.set_condition("great", "today", at("07:03"))
+
+
+def test_battery_charges_with_daylight_and_meals_and_drains_with_the_day_and_training():
+    a = v3_assistant()
+    a.log("sleep", at("23:00", DAY - timedelta(days=1)))
+    a.log("wake", at("07:00"))
+    plain = battery_at(a, at("10:00"))
+    assert ("Breakfast skipped", -4) in {(e["label"], e["delta"]) for e in plain["events"]}
+    plain = plain["level"]
+    a.log("sunlight", at("07:20"))
+    a.log("meal", at("07:45"))
+    lit = battery_at(a, at("10:00"))
+    assert lit["level"] == plain + 6 + 4 + 4  # daylight, breakfast, and no "skipped" penalty any more
+    assert {(e["label"], e["delta"]) for e in lit["events"]} >= {("Get daylight", 6), ("Breakfast", 4)}
+    a.log("exercise_intense", at("17:00"), duration=90)
+    evening = battery_at(a, at("18:00"))
+    assert ("Hard training", -12) in {(e["label"], e["delta"]) for e in evening["events"]}
+    assert evening["level"] < lit["level"] and 0 <= evening["at_bedtime"] < evening["level"]
+    assert battery_at(a, at("06:00"))["asleep"] is True  # before waking: only today's ceiling
+
+
+def test_battery_is_in_state_and_can_be_switched_off_and_saved(tmp_path):
+    from timeby.server import handle
+    s = live_at(tmp_path, "10:00")
+    assert s.state()["battery"]["capacity"] > 0
+    handle(s, "battery", {"condition": "tired", "scope": "open"})
+    assert s.state()["battery"]["condition"] == {"state": "tired", "scope": "open"}
+    handle(s, "battery", {"on": False})
+    assert s.state()["battery"] is None
+    again = live_at(tmp_path, "10:05")
+    assert again.assistant.battery_on is False and again.assistant.battery_condition.text == "tired"

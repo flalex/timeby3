@@ -5,7 +5,7 @@ from dataclasses import replace
 from datetime import date, datetime, timedelta
 from typing import Protocol
 
-from . import context, engine, intents, narration, personal
+from . import battery, context, engine, intents, narration, personal
 from . import tone as tones
 from .recovery import RecoveryPlan, build_recovery
 from .model import Contract, ContractReport, Event, Message, Profile, Recommendation, Rule, RuleKind, RuleResult, Status
@@ -40,6 +40,8 @@ class Assistant:
         self.skipped: set[tuple[date, str, str]] = set()      # goals the recovery plan dropped (no reminders)
         self.agent_context: dict[str, str] = {}               # owner's extra context per agent (AI recommendations)
         self.agent_situation: dict[str, context.Situation] = {}  # owner's "right now" per agent (travelling …), expires
+        self.battery_on = True                                 # the energy battery agent (derived, no goals of its own)
+        self.battery_condition: context.Situation | None = None  # how the owner feels: well / tired / unwell, expires
         self.tone = tones.DEFAULT                              # voice of every message (facts never change)
         self.tracked_from: dict[date, datetime] | None = None  # live: when each day's tracking started
         self.planned: list[Event] = []  # owner's records for later today: counted only once their time comes
@@ -364,6 +366,12 @@ class Assistant:
     def set_situation(self, contract_id: str, text: str, scope: str, now: datetime) -> None:
         self._check_agent(contract_id)
         self.agent_situation[contract_id] = context.situation(text, scope, self.ctx.logical_day(now))
+
+    def set_condition(self, state: str, scope: str, now: datetime) -> None:
+        """How the owner feels (well / tired / unwell) — lowers today's battery ceiling until it expires."""
+        if state not in battery.CONDITIONS:
+            raise ValueError(f"unknown condition '{state}'")
+        self.battery_condition = None if state == "well" else context.situation(state, scope, self.ctx.logical_day(now))
 
     def situation_of(self, contract_id: str, now: datetime) -> context.Situation | None:
         s = self.agent_situation.get(contract_id)

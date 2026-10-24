@@ -115,7 +115,8 @@ class Simulation:
         """Backlog: add / edit / log a session (with how much got done) / undo / done / delete."""
         action, b, day = body["action"], self.backlog, self.assistant.ctx.logical_day(self.now)
         fields = lambda: (body.get("title", ""), body.get("unit", ""), _count(body.get("total")),
-                          _count(body.get("per_week")) or tasks.DEFAULT_PER_WEEK)
+                          _count(body.get("per_week")) or tasks.DEFAULT_PER_WEEK, body.get("kind") or tasks.ONGOING,
+                          _count(body.get("estimate")), date.fromisoformat(body["deadline"]) if body.get("deadline") else None)
         if action == "add":
             b.add(*fields())
         elif action == "edit":

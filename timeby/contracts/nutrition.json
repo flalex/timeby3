@@ -231,7 +231,7 @@
       }
     },
     {
-      "id": "plants_lunch",
+      "id": "plants_lunch", "part_of": "regular_lunch",
       "title": "Vegetables with lunch",
       "label": "Veg with lunch",
       "topic": "Plants & fibre",
@@ -261,7 +261,7 @@
       ]
     },
     {
-      "id": "plants_dinner",
+      "id": "plants_dinner", "part_of": "regular_dinner",
       "title": "Vegetables with dinner",
       "label": "Veg with dinner",
       "topic": "Plants & fibre",
@@ -291,7 +291,7 @@
       ]
     },
     {
-      "id": "protein_breakfast",
+      "id": "protein_breakfast", "part_of": "regular_breakfast",
       "title": "Protein at breakfast",
       "label": "Protein breakfast",
       "topic": "Protein",

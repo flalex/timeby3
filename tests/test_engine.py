@@ -1168,3 +1168,39 @@ def test_backlog_says_when_today_matters_and_is_saved(tmp_path):
     tid = s.state()["tasks"][0]["id"]
     handle(s, "task", {"action": "log", "id": tid, "amount": "25"})
     assert live_at(tmp_path, "10:05").state()["tasks"][0]["progress"] == 25  # survives a restart
+
+
+def test_one_time_tasks_have_an_estimate_and_deadline_states():
+    from timeby.tasks import Backlog, view, ONCE
+    b = Backlog()
+    robot = b.add("Order robot at TaoBao", kind=ONCE, estimate=30, deadline=WED + timedelta(days=1))
+    row = view(b, WED)[0]
+    assert (row["kind"], row["estimate"], row["state"], row["due"]) == ("once", 30, "due_soon", "tomorrow")
+    assert row["unit"] == "" and row["total"] is None  # a one-off has no progress unit
+    assert view(b, WED + timedelta(days=3))[0]["state"] == "overdue"
+    b.set_done(robot.id, True)
+    assert view(b, WED)[0]["state"] == "done"
+    book = b.add("Deep Work", "pages", 300, 2, deadline=WED + timedelta(days=7))
+    b.log(book.id, WED, 20)
+    assert "after the deadline" in next(r for r in view(b, WED) if r["id"] == book.id)["pace"]
+    with pytest.raises(ValueError, match="more than 0"):
+        b.add("Nothing", kind=ONCE, estimate=0)
+    assert len(b.tasks) == 2  # a rejected add leaves nothing behind
+
+
+def test_companion_goals_are_parts_of_their_meal_and_only_the_routine_hangs_under_wake_up():
+    from timeby.today import build_today
+    a = v3_assistant()
+    now = at("06:30")
+    later = {i["rule_id"]: i for i in build_today(a.status(now), now)["later"]}
+    assert later["protein_breakfast"]["part_of"] == "regular_breakfast"
+    assert later["plants_lunch"]["part_of"] == "regular_lunch" and later["plants_dinner"]["part_of"] == "regular_dinner"
+    assert later["morning_light"].get("waiting") and later["water_on_waking"].get("waiting")
+    assert not later["development"].get("waiting") and later["development"]["time"] == "09:00"  # its own block
+    with pytest.raises(ContractError, match="part_of"):
+        raw = {"id": "x", "name": "X", "domain": "x", "goal": "g", "sources": {"s": "S"},
+            "phases": [{"id": "p", "goal": "g", "window": {"anchor": "wake", "start": 0, "end": 60}}],
+            "rules": [{"id": "r", "title": "R", "phase": "p", "kind": "do", "actions": ["water"], "part_of": "nope",
+                       "window": {"anchor": "wake", "start": 0, "end": 60}, "weight": 1, "strength": "strong",
+                       "why": "w", "advice": "a", "sources": ["s"]}]}
+        parse_contract(raw, ACTIONS)

@@ -70,6 +70,7 @@ class Rule:
     late_credit: float = 0.5     # share of the weight earned when done late (doing it late beats skipping)
     late_why: str = ""           # what doing it late still gives, and what it misses (shown with the credit)
     remind: bool = True          # False: no own reminder (e.g. raised together with a paired goal)
+    part_of: str | None = None   # a quality of another goal's moment (protein at breakfast): shown on that goal's row
     off_by_default: bool = False # an opt-in goal (e.g. a 9–5 job): the owner switches it on in ⚙︎
     weekly_target: int | None = None  # how many times a week counts as success; None = most planned days
     weekly_why: str = ""              # why that target (shown in the weekly view)

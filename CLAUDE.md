@@ -77,11 +77,16 @@ scoring of situation/state) must be deterministic and grounded — never random,
 - Timeline time = when to start (`engine.planned_start`: the anchor when the window surrounds it, else the window's
   start), with "until <on-time deadline>" under it; sorted by start, wake-up first on ties. A goal turns "now" at its
   planned start (minus regularity tolerance); earlier still counts ("Done early").
-- Goals that wait for waking (window starts at/after wake, wake not observed yet) render as branches under the
-  Wake up row instead of repeating "After waking" (today item `waiting`, `underWakeUp` in v3.html).
-- Tasks tab (next to Timeline; `tasks.py`, `web/tasks.js`, saved in `tasks.json`): a backlog (books, courses) with
-  progress in its own unit (pages, lessons …), optional total, and a weekly rhythm (sessions a week) judged like the
-  weekly goals (rhythm kept / on track / needs today / behind) plus pace ("about 2 weeks to finish"). Not a science
+- The wake-up routine (goals starting within 30 min of waking, wake not observed yet) renders as branches under the
+  Wake up row (today item `waiting`, `underWakeUp` in v3.html); later wake-relative blocks (development) keep their
+  own row and estimated time. Rule `part_of` = a quality of another goal's moment (protein at breakfast, veg with
+  lunch/dinner): shown as a chip on that goal's row, never as a second meal; still its own goal in scores/week.
+  Limits show "until …" under their start time like every row.
+- Tasks tab (next to Timeline; `tasks.py`, `web/tasks.js`, saved in `tasks.json`): ongoing items (books, courses) with
+  progress in their own unit (pages, lessons …), optional total, and a weekly rhythm (sessions a week) judged like the
+  weekly goals (rhythm kept / on track / needs today / behind) plus pace ("about 2 weeks to finish"); one-time tasks
+  with "takes ~30 min". Any task can have a deadline (overdue / due today / due soon beat the rhythm; pace says if
+  an ongoing one makes its deadline). Not a science
   contract: no score, no reminders. The demo seeds a sample book and course.
 - Rule `off_by_default` = opt-in goal (the 9–5 job topic): off until the owner switches it on in ⚙︎.
 - Claude API key: set in Assistant ⚙︎, stored by `keystore.py` in the macOS Keychain (else ~/.config/timeby, 0600),

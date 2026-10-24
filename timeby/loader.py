@@ -80,6 +80,7 @@ def _rule(raw: dict) -> Rule:
         late_why=raw.get("late_why", DEFAULT_LATE_WHY),
         remind=bool(raw.get("remind", True)),
         off_by_default=bool(raw.get("off_by_default", False)),
+        part_of=raw.get("part_of"),
         weekly_target=raw.get("weekly_target"),
         weekly_why=raw.get("weekly_why", ""),
     )
@@ -89,7 +90,7 @@ DEFAULT_LATE_WHY = "Doing it late still beats skipping it, but the timing is the
 
 
 def _validate(contract: Contract, actions: dict[str, str]) -> None:
-    phase_ids = {p.id for p in contract.phases}
+    phase_ids, rule_ids = {p.id for p in contract.phases}, {r.id for r in contract.rules}
     errors = []
     for rule in contract.rules:
         where = f"{contract.id}.{rule.id}"
@@ -104,6 +105,8 @@ def _validate(contract: Contract, actions: dict[str, str]) -> None:
         if rule.kind is RuleKind.REGULARITY and rule.tolerance <= 0:
             errors.append(f"{where}: regularity rule needs a positive tolerance")
         errors += [f"{where}: unknown weekday '{d}'" for d in rule.days if d not in WEEKDAYS]
+        if rule.part_of and (rule.part_of not in rule_ids or rule.part_of == rule.id):
+            errors.append(f"{where}: part_of must name another goal of this agent")
         if rule.strength not in {"strong", "moderate", "emerging"}:
             errors.append(f"{where}: strength must be strong|moderate|emerging")
     if errors:

@@ -9,6 +9,7 @@ from .recovery import RecoveryPlan
 from .sleep_plan import WakePlan
 
 WAKE_ANCHOR = "wake"  # profile anchor of waking up; its regularity goal is the root of a late start
+ROUTINE_MIN = 30      # goals starting within this many minutes of waking belong to the wake-up routine
 
 
 def build_today(reports: list[ContractReport], now: datetime, notes: dict | None = None,
@@ -108,7 +109,9 @@ def _place_task(rep: ContractReport, r: RuleResult, now: datetime) -> dict:
     if r.status is Status.MISSED:
         return _item(rep, r, "earlier", r.deadline, outcome="Missed", tone="bad")
     if r.status is Status.WAITING:
-        return _item(rep, r, "later", planned, time="After waking", by=f"{r.deadline:%H:%M}", waiting=True)
+        if r.rule.window.start <= ROUTINE_MIN:  # part of getting up: shown as a branch of Wake up
+            return _item(rep, r, "later", planned, time="After waking", by=f"{r.deadline:%H:%M}", waiting=True)
+        return _item(rep, r, "later", planned, time=f"{planned:%H:%M}", by=f"{r.deadline:%H:%M}")  # follows wake-up, but its own block
     if now >= r.deadline:  # off schedule but the window is still open: late, worth doing for partial credit
         return _item(rep, r, "now", planned, opens=r.deadline, now=now, due=r.end, late=True)
     opens = planned - timedelta(minutes=r.rule.tolerance)  # doing it earlier still counts ("Done early")
@@ -123,7 +126,7 @@ def _item(rep: ContractReport, r: RuleResult, slot: str, at: datetime, *, opens:
         "slot": slot, "sort": at.isoformat(), "at": f"{at:%H:%M}",
         "contract_id": rep.contract.id, "rule_id": r.rule.id, "kind": r.rule.kind.value,
         "title": r.rule.label, "advice": r.rule.advice, "action": r.rule.actions[0], "weight": r.rule.weight,
-        "remind": r.rule.remind, "pairs": [(p.with_rule, p.text) for p in r.rule.pairs],
+        "remind": r.rule.remind, "pairs": [(p.with_rule, p.text) for p in r.rule.pairs], "part_of": r.rule.part_of,
         "root": r.rule.kind is RuleKind.REGULARITY and r.rule.window.anchor == WAKE_ANCHOR,
         **extra,
     }

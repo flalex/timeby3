@@ -183,7 +183,13 @@ aside.left { position: sticky; top: 76px; height: calc(100vh - 100px); display: 
 .row:first-child { border-top: 0; }
 .row .t { font-size: 14px; color: var(--muted); }
 .row .t.soft { font-size: 12px; }
-.row .t small { display: block; font-size: 11.5px; color: var(--faint); margin-top: 1px; white-space: nowrap; }
+.row .t small { display: block; font-size: 11.5px; line-height: 1.25; color: var(--faint); margin-top: 1px; }
+.name .part { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 1px 9px; font-size: 12px;
+  font-weight: 600; color: var(--muted); white-space: nowrap; cursor: pointer; }
+.name .part.open { border-style: dashed; color: var(--accent); }
+.name .part.good { background: var(--accent-soft); border-color: transparent; color: var(--accent); }
+.name .part.late { background: var(--warn-soft); border-color: transparent; color: var(--warn); }
+.name .part.bad { background: var(--bad-soft); border-color: transparent; color: var(--bad); }
 .row .name { font-size: 15px; }
 .row .meta { font-size: 13px; color: var(--muted); }
 .mark { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; font-size: 14px; border: 0; padding: 0; }
@@ -273,7 +279,7 @@ aside.left { position: sticky; top: 76px; height: calc(100vh - 100px); display: 
 .nowline .pill { font: 700 12px ui-monospace, Menlo, monospace; color: var(--accent-ink); background: var(--accent); border-radius: 999px; padding: 2px 9px; }
 .nowline::after { content: ""; flex: 1; height: 2px; background: var(--accent); border-radius: 1px; }
 
-.name { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.name { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; }
 .dur { font-size: 11.5px; font-weight: 600; color: var(--muted); background: var(--surface-2); border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; white-space: nowrap; }
 .row.current .dur { background: var(--surface); }
 .cmt { font-size: 12px; cursor: help; }
@@ -856,7 +862,8 @@ const shownTime = (i) => (i.kind === "avoid" && i.slot !== "later" ? S.clock : i
 
 /** Open and later items in strict time order, so the timeline reads like a clock. */
 function upcoming(t) {
-  const items = [...(t.now.hero ? [t.now.hero] : []), ...t.now.also, ...t.now.avoid, ...t.later, ...ownRecords({ planned: true })];
+  const items = [...(t.now.hero ? [t.now.hero] : []), ...t.now.also, ...t.now.avoid, ...t.later, ...ownRecords({ planned: true })]
+    .filter((i) => !isPart(i));
   const key = (i, n) => [dayMin(shownTime(i)), i.root ? 0 : 1, n];  // wake-up first: what follows it hangs on it
   return items.map((i, n) => [...key(i, n), i]).sort((x, y) => x[0] - y[0] || x[1] - y[1] || x[2] - y[2]).map((k) => k[3]);
 }
@@ -868,10 +875,34 @@ function underWakeUp(items) {
 }
 let withBusy = (items, toRows) => items.flatMap(toRows);  // calendar.js replaces it to merge meetings in
 
+// ---------- companion goals (protein at breakfast, veg with lunch): chips on their meal's row, not rows of their own ----------
+let PARTS = {};  // parent rule id -> its companion items, rebuilt every render
+
+function collectParts(t) {
+  const all = [...t.earlier, ...(t.now.hero ? [t.now.hero] : []), ...t.now.also, ...t.later];
+  const ids = new Set(all.map((i) => i.rule_id));
+  PARTS = {};
+  all.filter((i) => i.part_of && ids.has(i.part_of)).forEach((i) => (PARTS[i.part_of] ||= []).push(i));
+}
+const isPart = (i) => Boolean(i.part_of && PARTS[i.part_of]?.includes(i));
+const PART_MARK = { good: "✓", late: "◐", bad: "✕", none: "·" };
+
+function partsHtml(parent) {
+  return (PARTS[parent.rule_id] || []).map((p) => {
+    const label = `${ICONS[p.action] || ""} ${SHORT[p.action] || p.title}`;
+    if (p.slot !== "earlier") return `<button class="part open" data-log="${p.action}" title="${esc(p.title)} — tap when it's on the plate">+ ${label}</button>`;
+    return `<button class="part ${p.tone}" data-edit-part="${p.rule_id}" title="${esc(p.title)} · ${esc(p.outcome)} — tap to edit">${PART_MARK[p.tone] || ""} ${label}</button>`;
+  }).join("");
+}
+
+/** The editor of a companion goal opens under its meal's row. */
+const partEditor = (parent) => (PARTS[parent.rule_id] || []).filter((p) => editing === p.rule_id && p.edit).map(editorHtml).join("");
+
 function timelineSection(t) {
+  collectParts(t);
   const ls = t.late_start;
   const untracked = t.earlier.filter((i) => i.tone === "none");
-  const goals = t.earlier.filter((i) => i.tone !== "none" && !(ls && i.cause === "late_start"));
+  const goals = t.earlier.filter((i) => i.tone !== "none" && !(ls && i.cause === "late_start") && !isPart(i));
   const past = [...goals, ...ownRecords()].sort((x, y) => (x.sort < y.sort ? -1 : x.sort > y.sort ? 1 : 0));
   const keepOpen = past.findIndex((i) => editKey(i) === editing);
   const foldCount = showAllEarlier ? 0 : Math.max(0, past.length - PAST_VISIBLE);
@@ -953,7 +984,7 @@ function timeCell(start, item, cls = "", until = "") {
 }
 const durationTag = (item) => item.kind !== "avoid" && item.duration ? `<span class="dur">${fmtDur(item.duration)}</span>` : "";
 const comment = (i) => i.comment ? `<span class="cmt" title="${esc(i.comment)}">💬</span>` : "";
-const nameCell = (i) => `<span class="name"><span>${esc(i.title)}</span>${comment(i)}${durationTag(i)}</span>`;
+const nameCell = (i) => `<span class="name"><span>${esc(i.title)}</span>${comment(i)}${durationTag(i)}${partsHtml(i)}</span>`;
 
 function foldRow(items) {
   const count = (pred) => items.filter(pred).length;
@@ -971,7 +1002,7 @@ function pastRow(i, extra = "") {
   const meta = i.outcome === i.at ? "Done" : i.outcome;
   return `<div class="row past ${i.tone} ${extra} ${open ? "editing" : ""}" data-edit="${i.rule_id}" title="Click to edit">
     ${timeCell(i.at, i)}<span class="mark ${markCls}">${mark}</span>${nameCell(i)}
-    <span class="meta" ${i.late_note ? `title="${esc(i.late_note)}"` : ""}>${esc(meta)}</span></div>${open ? editorHtml(i) : ""}`;
+    <span class="meta" ${i.late_note ? `title="${esc(i.late_note)}"` : ""}>${esc(meta)}</span></div>${open ? editorHtml(i) : ""}${partEditor(i)}`;
 }
 
 let untrackedOpen = false;
@@ -1015,12 +1046,12 @@ function editorHtml(i) {
 
 function currentRow(c, isFocus) {
   if (c.kind === "avoid") {
-    return `<div class="row current limit">${timeCell("now", c, "soft")}<span class="mark limit">${ICONS[c.action] || ""}</span>
-      ${nameCell(c)}<span class="meta">until ${c.until}</span></div>`;
+    return `<div class="row current limit">${timeCell("now", c, "soft", c.until)}<span class="mark limit">${ICONS[c.action] || ""}</span>
+      ${nameCell(c)}<span class="meta"></span></div>`;
   }
   return `<div class="row current ${isFocus ? "focus" : ""} ${c.late ? "late" : ""}" data-plan="${c.rule_id}" title="Click to move or skip today">${timeCell(c.at, c, "", c.by)}
     <button class="mark todo" data-log="${c.action}" title="Mark done">${ICONS[c.action] || ""}</button>
-    ${nameCell(c)}<span class="meta">${c.late ? "late · " : ""}${c.minutes_left} min left</span></div>${editing === planKey(c) ? planEditor(c) : ""}`;
+    ${nameCell(c)}<span class="meta">${c.late ? "late · " : ""}${c.minutes_left} min left</span></div>${editing === planKey(c) ? planEditor(c) : ""}${partEditor(c)}`;
 }
 
 function futureRow(i, extra = "") {
@@ -1028,9 +1059,9 @@ function futureRow(i, extra = "") {
   const mark = avoid ? `<span class="mark limit">${ICONS[i.action] || ""}</span>`
     : `<button class="mark todo" data-log="${i.action}" title="Done early">${ICONS[i.action] || ""}</button>`;
   const moved = S.plan_changes?.[i.rule_id] ? `<span class="dur">moved</span>` : "";
-  const time = extra === "child" ? timeCell("", i, "", i.by) : timeCell(i.time, i, "", avoid ? "" : i.by);
+  const time = extra === "child" ? timeCell("", i, "", i.by) : timeCell(i.time, i, "", avoid ? i.until : i.by);
   return `<div class="row future ${avoid ? "limit" : ""} ${extra}" data-plan="${i.rule_id}" title="Click to move or skip today">${time}${mark}
-    ${nameCell(i)}<span class="meta">${moved}${avoid && i.until ? `until ${i.until}` : ""}</span></div>${editing === planKey(i) ? planEditor(i) : ""}`;
+    ${nameCell(i)}<span class="meta">${moved}</span></div>${editing === planKey(i) ? planEditor(i) : ""}${partEditor(i)}`;
 }
 
 function tomorrowRows(w) {
@@ -1064,6 +1095,7 @@ function bindToday() {
   v.querySelector("#untracked-toggle")?.addEventListener("click", () => { untrackedOpen = !untrackedOpen; renderToday(); });
   v.querySelector("#tomorrow")?.addEventListener("click", () => { tomorrowOpen = !tomorrowOpen; renderToday(); });
   v.querySelectorAll("[data-edit]").forEach((row) => row.addEventListener("click", () => toggleEditor(row.dataset.edit)));
+  v.querySelectorAll("[data-edit-part]").forEach((b) => b.addEventListener("click", (e) => { e.stopPropagation(); toggleEditor(b.dataset.editPart); }));
   bindEditor();
   bindRecordEditor();
   bindPlanEditor();

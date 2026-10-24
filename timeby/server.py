@@ -8,7 +8,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from importlib.util import find_spec
 from pathlib import Path
 
-from . import calendar_feed, calendar_ics
+from . import calendar_feed, calendar_ics, tasks
 from .assistant import Assistant
 from .demo import PROFILE, seed_history
 from .loader import load_actions, load_contracts
@@ -71,6 +71,7 @@ class Simulation:
         else:
             seed_history(self.assistant, today, pattern=TYPICAL_WEEK)
             self.now = datetime.combine(today, time(6, 30))
+            self.backlog = tasks.sample(today)
         self._apply_meetings()
         self.sensors_on = True
         self.log_sources: dict[tuple[str, datetime], str] = {}
@@ -99,6 +100,7 @@ class Simulation:
     def _restore(self) -> None:
         self.assistant.tracked_from = {}  # live: only what the owner and the agent record; nothing judged before tracking
         settings = self.store.restore(self.assistant) if self.store else {}
+        self.backlog = self.store.load_tasks() if self.store else tasks.Backlog()
         self.assistant.start_tracking(self.now)
         self.profile, self.day_overrides = self.assistant.profile, dict(self.assistant.day_overrides)
         if settings.get("telegram"):
@@ -107,6 +109,27 @@ class Simulation:
     def persist(self) -> None:
         if self.live and self.store:
             self.store.save(self.assistant, self.assistant.ctx.logical_day(self.now), {"telegram": self.telegram.saved()})
+            self.store.save_tasks(self.backlog)
+
+    def change_task(self, body: dict) -> None:
+        """Backlog: add / edit / log a session (with how much got done) / undo / done / delete."""
+        action, b, day = body["action"], self.backlog, self.assistant.ctx.logical_day(self.now)
+        fields = lambda: (body.get("title", ""), body.get("unit", ""), _count(body.get("total")),
+                          _count(body.get("per_week")) or tasks.DEFAULT_PER_WEEK)
+        if action == "add":
+            b.add(*fields())
+        elif action == "edit":
+            b.edit(body["id"], *fields())
+        elif action == "log":
+            b.log(body["id"], day, _count(body.get("amount")) or 0)
+        elif action == "undo":
+            b.undo_last(body["id"])
+        elif action == "done":
+            b.set_done(body["id"], bool(body.get("done", True)))
+        elif action == "delete":
+            b.delete(body["id"])
+        else:
+            raise KeyError(action)
 
     def set_context(self, contract_id: str, text: str) -> None:
         if contract_id not in self._contracts:
@@ -341,6 +364,7 @@ class Simulation:
             "week": build_week(self.assistant, now),
             "profile": self._profile(),
             "connectors": self._connectors(),
+            "tasks": tasks.view(self.backlog, day),
             "busy": [self._busy_block(m) for m in sorted(self.meetings, key=lambda m: m.start)],
         }
 
@@ -484,6 +508,16 @@ class Simulation:
         }
 
 
+def _count(value) -> int | None:
+    """A whole number typed by the owner (pages, sessions a week), or None when left empty."""
+    text = str(value if value is not None else "").strip()
+    if not text:
+        return None
+    if not text.lstrip("-").isdigit():
+        raise ValueError("Use a whole number, e.g. 25.")
+    return int(text)
+
+
 def _minutes(value) -> int | None:
     """A duration typed by the owner: whole minutes, or None when left empty."""
     text = str(value or "").strip()
@@ -525,6 +559,9 @@ def handle(sim: Simulation, op: str, body: dict) -> dict:
         messages = []
     elif op == "record":
         sim.change_record(body)
+        messages = []
+    elif op == "task":
+        sim.change_task(body)
         messages = []
     elif op == "say":
         messages = sim.say(body["text"])

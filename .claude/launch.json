@@ -1,6 +1,7 @@
 {
   "version": "0.0.1",
   "configurations": [
-    {"name": "timeby", "runtimeExecutable": "python3", "runtimeArgs": ["-m", "timeby.server"], "port": 8765}
+    {"name": "timeby", "runtimeExecutable": "python3", "runtimeArgs": ["-m", "timeby.server"], "port": 8765},
+    {"name": "timeby-check", "runtimeExecutable": "python3", "runtimeArgs": ["-c", "from timeby.server import main; main(8766)"], "port": 8766}
   ]
 }

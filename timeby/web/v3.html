@@ -238,6 +238,13 @@ aside.left { position: sticky; top: 76px; height: calc(100vh - 100px); display: 
 .mark.half { background: var(--warn-soft); color: var(--warn); font-weight: 700; }
 .mark.skip { background: var(--surface-2); color: var(--faint); }
 .row.past.child { padding-left: 24px; }
+/* a goal that starts once you're up, drawn as a branch of the Wake up row above it */
+.row.future.child { min-height: 44px; border-top-color: transparent; }
+.row.future.child .mark { margin-left: 26px; width: 26px; height: 26px; font-size: 13px; }
+.row.future.child .name { padding-left: 26px; }
+.row.future.child::before { content: ""; position: absolute; left: 89px; top: 0; bottom: 50%; width: 16px;
+  border-left: 1.5px solid var(--line); border-bottom: 1.5px solid var(--line); border-bottom-left-radius: 8px; }
+.row.future.child:has(+ .row.future.child)::after { content: ""; position: absolute; left: 89px; top: 50%; bottom: 0; border-left: 1.5px solid var(--line); }
 .late-start { width: 100%; border: 0; border-top: 1px solid var(--line); background: none; display: grid; grid-template-columns: 64px 30px 1fr auto;
   gap: 10px; align-items: center; min-height: 46px; text-align: left; padding: 0; color: var(--warn); font-size: 14px; font-weight: 600; }
 .late-start .meta { font-weight: 500; color: var(--muted); font-size: 13px; }
@@ -422,8 +429,11 @@ body.week .day-only { display: none !important; }
       <div class="log-wrap"><button class="log-btn" id="log-btn" aria-haspopup="menu"><span class="plus" aria-hidden="true">+</span>Log activity</button>
         <div class="menu" id="menu" role="menu" hidden></div></div></div>
     <section id="now-card" class="day-only"></section>
-    <div class="section-h timeline-h day-only"><span>Timeline</span><span id="fold-slot"></span></div>
+    <div class="section-h timeline-h day-only"><nav class="sec-tabs" id="dtabs" role="tablist" aria-label="Day">
+        <button data-dtab="timeline" role="tab" class="on">Timeline</button><button data-dtab="tasks" role="tab">Tasks</button></nav>
+      <span id="fold-slot"></span></div>
     <section id="timeline" class="day-only"></section>
+    <section id="tasks" class="day-only" hidden></section>
     <section id="week" hidden></section>
   </main>
 
@@ -850,6 +860,12 @@ function upcoming(t) {
   const key = (i, n) => [dayMin(shownTime(i)), i.root ? 0 : 1, n];  // wake-up first: what follows it hangs on it
   return items.map((i, n) => [...key(i, n), i]).sort((x, y) => x[0] - y[0] || x[1] - y[1] || x[2] - y[2]).map((k) => k[3]);
 }
+/** Goals that start once you're up hang under "Wake up" instead of repeating "After waking" on every row. */
+function underWakeUp(items) {
+  const root = items.find((i) => i.root);
+  if (!root) return { flow: items, children: [] };
+  return { flow: items.filter((i) => !i.waiting), children: items.filter((i) => i.waiting) };
+}
 let withBusy = (items, toRows) => items.flatMap(toRows);  // calendar.js replaces it to merge meetings in
 
 function timelineSection(t) {
@@ -866,7 +882,9 @@ function timelineSection(t) {
   rows.push(...withBusy(past.slice(folded.length), (i) => i.type === "record" ? [recordRow(i)]
     : i.root && ls ? lateStartRows(i, ls, t.earlier) : [pastRow(i)], "past"));
   rows.push(`<div class="nowline" title="Now"><span class="pill num">${S.clock}</span></div>`);
-  rows.push(...withBusy(upcoming(t), (i) => [i.type === "record" ? recordRow(i) : i.slot === "later" ? futureRow(i) : currentRow(i, i === t.now.hero)],
+  const { flow, children } = underWakeUp(upcoming(t));
+  const upcomingRow = (i) => i.type === "record" ? recordRow(i) : i.slot === "later" ? futureRow(i) : currentRow(i, i === t.now.hero);
+  rows.push(...withBusy(flow, (i) => [upcomingRow(i), ...(i.root ? children.map((c) => futureRow(c, "child")) : [])],
     "upcoming", (i) => dayMin(shownTime(i))));
   rows.push(...skippedRows());
   if (t.tomorrow) rows.push(tomorrowRows(t.tomorrow));
@@ -1005,12 +1023,13 @@ function currentRow(c, isFocus) {
     ${nameCell(c)}<span class="meta">${c.late ? "late · " : ""}${c.minutes_left} min left</span></div>${editing === planKey(c) ? planEditor(c) : ""}`;
 }
 
-function futureRow(i) {
+function futureRow(i, extra = "") {
   const avoid = i.kind === "avoid";
   const mark = avoid ? `<span class="mark limit">${ICONS[i.action] || ""}</span>`
     : `<button class="mark todo" data-log="${i.action}" title="Done early">${ICONS[i.action] || ""}</button>`;
   const moved = S.plan_changes?.[i.rule_id] ? `<span class="dur">moved</span>` : "";
-  return `<div class="row future ${avoid ? "limit" : ""}" data-plan="${i.rule_id}" title="Click to move or skip today">${timeCell(i.time, i, "", avoid ? "" : i.by)}${mark}
+  const time = extra === "child" ? timeCell("", i, "", i.by) : timeCell(i.time, i, "", avoid ? "" : i.by);
+  return `<div class="row future ${avoid ? "limit" : ""} ${extra}" data-plan="${i.rule_id}" title="Click to move or skip today">${time}${mark}
     ${nameCell(i)}<span class="meta">${moved}${avoid && i.until ? `until ${i.until}` : ""}</span></div>${editing === planKey(i) ? planEditor(i) : ""}`;
 }
 
@@ -1261,5 +1280,6 @@ if (LIVE) {
 <script src="/static/assistant.js"></script>
 <script src="/static/messenger.js"></script>
 <script src="/static/week.js"></script>
+<script src="/static/tasks.js"></script>
 </body>
 </html>

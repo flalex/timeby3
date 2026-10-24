@@ -27,6 +27,10 @@ CONNECTORS = (
               "Knows when you are outdoors, at the gym, the padel club or the beach — logs daylight and sessions, "
               "and times nudges to where you are.",
               ("sunlight", "exercise_intense", "running", "padel", "surf"), status="proposed", group="Location"),
+    Connector("apple_notes", "Apple Notes", "🗒️", "Mac · iPhone notes arrive through iCloud",
+              "Turns a note you keep (e.g. a \"Books to read\" checklist) into Tasks, and saves your evening recap "
+              "as a note. Runs on your Mac; notes written on the iPhone sync there through iCloud.",
+              status="proposed", group="Notes"),
     Connector("telegram", "Telegram", "✈️", "Your own bot · set up in a minute with @BotFather",
               "Your assistant in your pocket: plans, warnings and the evening recap as Telegram messages.",
               group="Messenger"),

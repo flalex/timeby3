@@ -2,6 +2,7 @@
 
 <data dir>/2026-10-19.json  — that day's events, notes and which reminders were already sent
 <data dir>/settings.json    — the owner's times, weekday overrides, switched-off agents/goals, AI context
+<data dir>/tasks.json       — the backlog (books, courses …) with every progress entry
 The data dir is `TIMEBY_DATA_DIR`, or `data/live` in the repo (git-ignored).
 """
 from __future__ import annotations
@@ -11,12 +12,15 @@ import os
 from datetime import date, datetime
 from pathlib import Path
 
+from . import tasks
 from .assistant import Assistant
+from .tasks import Backlog
 from .model import Event
 from .personal import ANCHORS, parse_times
 
 DEFAULT_DIR = Path(os.environ.get("TIMEBY_DATA_DIR") or Path(__file__).resolve().parent.parent / "data" / "live")
 SETTINGS = "settings.json"
+TASKS = "tasks.json"
 
 
 def _key(contract_id: str, rule_id: str) -> str:
@@ -45,6 +49,13 @@ class LiveStore:
         changed = {d for d, _ in a.plan_changes if d > day}
         saved = {date.fromisoformat(p.stem) for p in self.root.glob("????-??-??.json") if date.fromisoformat(p.stem) > day}
         return changed | saved
+
+    def save_tasks(self, backlog: Backlog) -> None:
+        self._write(TASKS, {"tasks": tasks.to_json(backlog)})
+
+    def load_tasks(self) -> Backlog:
+        path = self.root / TASKS
+        return tasks.from_json(json.loads(path.read_text())["tasks"]) if path.is_file() else Backlog()
 
     def _settings(self, a: Assistant) -> dict:
         return {

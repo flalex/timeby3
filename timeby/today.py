@@ -108,7 +108,7 @@ def _place_task(rep: ContractReport, r: RuleResult, now: datetime) -> dict:
     if r.status is Status.MISSED:
         return _item(rep, r, "earlier", r.deadline, outcome="Missed", tone="bad")
     if r.status is Status.WAITING:
-        return _item(rep, r, "later", planned, time="After waking", by=f"{r.deadline:%H:%M}")
+        return _item(rep, r, "later", planned, time="After waking", by=f"{r.deadline:%H:%M}", waiting=True)
     if now >= r.deadline:  # off schedule but the window is still open: late, worth doing for partial credit
         return _item(rep, r, "now", planned, opens=r.deadline, now=now, due=r.end, late=True)
     opens = planned - timedelta(minutes=r.rule.tolerance)  # doing it earlier still counts ("Done early")

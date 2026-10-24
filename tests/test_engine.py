@@ -1133,3 +1133,38 @@ def test_timeline_shows_when_to_start_and_until_when():
     wake = next(i for i in current if i and i["rule_id"] == "consistent_wake")
     assert (wake["at"], wake["by"]) == ("07:00", "07:30")
     assert all(i["rule_id"] != "protein_breakfast" for i in current if i)  # not "now" before you're even up
+
+
+# --- tasks (backlog) ----------------------------------------------------------------------------
+
+def test_backlog_tracks_progress_weekly_rhythm_and_pace():
+    from timeby.tasks import Backlog, view
+    b = Backlog()
+    book = b.add("Deep Work", "pages", 300, 3)
+    mon = WED - timedelta(days=2)
+    b.log(book.id, mon - timedelta(days=7), 30)   # last week
+    b.log(book.id, mon, 20)
+    row = view(b, WED)[0]
+    assert (row["progress"], row["percent"], row["sessions"]) == (50, 17, 1)
+    assert row["state"] == "on_track" and "2 more in 5 days" in row["note"]
+    assert row["last"] == "2 days ago" and "25 pages a session" in row["pace"]
+    b.log(book.id, WED, 250)
+    assert view(b, WED)[0]["done"] is True  # reached the total
+    with pytest.raises(ValueError, match="1 to 7"):
+        b.add("Gym plan", per_week=9)
+
+
+def test_backlog_says_when_today_matters_and_is_saved(tmp_path):
+    from timeby.server import handle
+    from timeby.tasks import view, Backlog
+    b = Backlog()
+    course = b.add("Spanish", "lessons", 40, 4)
+    sat = WED + timedelta(days=3)
+    b.log(course.id, WED, 1)
+    assert view(b, sat)[0]["state"] == "behind"           # 1 of 4, 2 days left
+    assert view(b, WED + timedelta(days=2))[0]["state"] == "today"  # 1 of 4, 3 days left: every day counts
+    s = live_at(tmp_path, "10:00")
+    handle(s, "task", {"action": "add", "title": "Atomic Habits", "unit": "pages", "total": "320", "per_week": "4"})
+    tid = s.state()["tasks"][0]["id"]
+    handle(s, "task", {"action": "log", "id": tid, "amount": "25"})
+    assert live_at(tmp_path, "10:05").state()["tasks"][0]["progress"] == 25  # survives a restart

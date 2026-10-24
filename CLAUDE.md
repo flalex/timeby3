@@ -42,7 +42,7 @@ scoring of situation/state) must be deterministic and grounded — never random,
   recovery plan (now / moved with wake-up / late but worth it / skipped / unchanged + combine tips). While the owner
   is still asleep only the wake-up call is sent. Late-but-done earns `late_credit` (default 0.5, status LATE).
   Rules can declare `pairs` (goals to do together), `topic` (grouping), `remind: false` (companion goals).
-- `connectors.py`: declared connectors (calendar, fitness tracker, location, telegram). The Connectors tab uses the
+- `connectors.py`: declared connectors (calendar, fitness tracker, location, Apple Notes (proposed), telegram). The Connectors tab uses the
   Agents pattern: rows fold open for details, ⚙︎ opens the setup dialog; feature scripts register a setup in
   `CONNECTOR_SETUP[id] = {html, bind, summary}` and call `refreshConnectorDialog()` after actions.
 - Demo readiness (see `docs/next/`): `web/story.js` = Story mode (6 chapters on the real engine; uses the default
@@ -77,6 +77,12 @@ scoring of situation/state) must be deterministic and grounded — never random,
 - Timeline time = when to start (`engine.planned_start`: the anchor when the window surrounds it, else the window's
   start), with "until <on-time deadline>" under it; sorted by start, wake-up first on ties. A goal turns "now" at its
   planned start (minus regularity tolerance); earlier still counts ("Done early").
+- Goals that wait for waking (window starts at/after wake, wake not observed yet) render as branches under the
+  Wake up row instead of repeating "After waking" (today item `waiting`, `underWakeUp` in v3.html).
+- Tasks tab (next to Timeline; `tasks.py`, `web/tasks.js`, saved in `tasks.json`): a backlog (books, courses) with
+  progress in its own unit (pages, lessons …), optional total, and a weekly rhythm (sessions a week) judged like the
+  weekly goals (rhythm kept / on track / needs today / behind) plus pace ("about 2 weeks to finish"). Not a science
+  contract: no score, no reminders. The demo seeds a sample book and course.
 - Rule `off_by_default` = opt-in goal (the 9–5 job topic): off until the owner switches it on in ⚙︎.
 - Claude API key: set in Assistant ⚙︎, stored by `keystore.py` in the macOS Keychain (else ~/.config/timeby, 0600),
   never in the project/data folder, only ever shown masked; `ai.use_key_source` reads it.

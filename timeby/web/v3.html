@@ -52,9 +52,9 @@ body.live .demo-only { display: none !important; }
 
 /* left column: agents (product) + agent activity (demo) */
 /* a definite height, so a long list scrolls inside its card instead of running off the sticky column */
-.left { position: sticky; top: 76px; height: calc(100vh - 100px); display: flex; flex-direction: column; gap: 16px; min-height: 0; }
-@media (max-width: 1240px) { .left { position: static; height: auto; grid-column: 1 / -1; order: 3; display: grid; grid-template-columns: 1fr 1fr; align-items: start; } }
-@media (max-width: 860px) { .left { grid-template-columns: 1fr; } }
+aside.left { position: sticky; top: 76px; height: calc(100vh - 100px); display: flex; flex-direction: column; gap: 16px; min-height: 0; }
+@media (max-width: 1240px) { aside.left { position: static; height: auto; grid-column: 1 / -1; order: 3; display: grid; grid-template-columns: 1fr 1fr; align-items: start; } }
+@media (max-width: 860px) { aside.left { grid-template-columns: 1fr; } }
 .agents { background: var(--surface); border-radius: 16px; padding: 16px; box-shadow: var(--shadow); overflow: hidden auto; flex: 0 1 auto; min-height: 0; }
 @media (max-width: 1240px) { .agents { max-height: none; } }
 .ltabs { display: flex; gap: 2px; margin: -6px -6px 8px; }
